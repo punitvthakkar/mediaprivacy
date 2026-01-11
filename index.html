@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MediaPrivacy - Video & PDF Tools</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%23000' width='100' height='100'/><text y='.85em' x='10' font-size='70' fill='%23fff'>MP</text></svg>">
+    <link rel="stylesheet" href="styles.css">
+    <!-- FFmpeg.wasm for video conversion -->
+    <script src="https://cdn.jsdelivr.net/npm/@flemist/ffmpeg.wasm-st@0.10.1/dist/ffmpeg.min.js"></script>
+    <!-- PDF.js and related libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.9.359/pdf.min.js"></script>
+    <script src="https://unpkg.com/pdf-lib@1.17.1"></script>
+    <script src="https://unpkg.com/downloadjs@1.4.7"></script>
+    <script src="https://unpkg.com/browser-image-compression@2.0.0/dist/browser-image-compression.js"></script>
+    <script src="https://unpkg.com/pdfkit@0.11.0/js/pdfkit.standalone.js"></script>
+    <script src="https://unpkg.com/blob-stream@0.1.3/blob-stream.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.0/FileSaver.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.js"></script>
+</head>
+<body>
+    <div class="app-shell">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="brand">
+                <div class="brand-mark">MP</div>
+                <div class="brand-text">
+                    <div class="brand-title">MediaPrivacy</div>
+                    <div class="brand-subtitle">Local processing - fast, offline, private</div>
+                </div>
+            </div>
+            <div class="header-actions">
+                <button class="btn ghost" id="helpToggle">How it works</button>
+            </div>
+        </header>
+
+        <!-- Quick help -->
+        <section class="help-panel hidden" id="helpPanel">
+            <div class="help-row">
+                <span class="step">1</span>
+                <span>First run downloads FFmpeg (~25MB). Cached afterwards.</span>
+            </div>
+            <div class="help-row">
+                <span class="step">2</span>
+                <span>All processing stays in this tab. Nothing uploads to any server.</span>
+            </div>
+            <div class="help-row">
+                <span class="step">3</span>
+                <span>Pick an action, drop a file, download the result.</span>
+            </div>
+        </section>
+
+        <!-- Action Cards Grid -->
+        <section class="action-grid" id="actionGrid">
+            <!-- PDF to Images Card -->
+            <div class="action-card" id="card-pdf-images" data-action="pdf-images">
+                <div class="card-header" data-card="pdf-images">
+                    <div class="card-icon icon-pdf">1</div>
+                    <div class="card-info">
+                        <div class="card-title">PDF to Images</div>
+                        <div class="card-desc">Export pages as PNG</div>
+                    </div>
+                    <button class="card-close hidden" data-close="pdf-images">x</button>
+                </div>
+                <div class="card-body hidden" id="body-pdf-images">
+                    <div class="card-dropzone" id="dropzone-pdf-images">
+                        <input type="file" id="file-pdf-images" class="file-input" accept=".pdf,application/pdf">
+                        <div class="dropzone-display">
+                            <div class="dropzone-icon">[^]</div>
+                            <div class="dropzone-text">Drop PDF here or browse</div>
+                            <div class="dropzone-formats">PDF files only</div>
+                        </div>
+                    </div>
+                    <div class="card-options hidden" id="options-pdf-images">
+                        <div class="file-selected">
+                            <span class="file-name" id="filename-pdf-images"></span>
+                            <span class="file-size" id="filesize-pdf-images"></span>
+                            <button class="btn-remove" id="remove-pdf-images">x</button>
+                        </div>
+                        <div class="options-row">
+                            <label>Pages</label>
+                            <div class="radio-group">
+                                <label><input type="radio" name="pages-pdf-images" value="all" checked> All pages</label>
+                                <label><input type="radio" name="pages-pdf-images" value="specific"> Select pages</label>
+                            </div>
+                        </div>
+                        <div class="options-row hidden" id="page-input-row-pdf-images">
+                            <input type="text" id="page-input-pdf-images" class="form-control" placeholder="e.g., 1,3-5,7">
+                        </div>
+                        <button class="btn primary stretch" id="convert-pdf-images">Convert to PNG</button>
+                    </div>
+                    <div class="card-progress hidden" id="progress-pdf-images">
+                        <div class="progress-status" id="progress-status-pdf-images">Converting...</div>
+                        <div class="progress-bar-wrap">
+                            <div class="progress-bar" id="progress-bar-pdf-images"></div>
+                        </div>
+                        <div class="progress-percent" id="progress-percent-pdf-images">0%</div>
+                    </div>
+                    <div class="card-result hidden" id="result-pdf-images">
+                        <div class="result-title">Done</div>
+                        <div class="result-file" id="result-file-pdf-images">Images downloaded</div>
+                        <div class="result-actions">
+                            <button class="btn ghost" id="another-pdf-images">Convert another</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Split PDF Card -->
+            <div class="action-card" id="card-split-pdf" data-action="split-pdf">
+                <div class="card-header" data-card="split-pdf">
+                    <div class="card-icon icon-split">2</div>
+                    <div class="card-info">
+                        <div class="card-title">Split PDF</div>
+                        <div class="card-desc">Divide into parts</div>
+                    </div>
+                    <button class="card-close hidden" data-close="split-pdf">x</button>
+                </div>
+                <div class="card-body hidden" id="body-split-pdf">
+                    <div class="card-dropzone" id="dropzone-split-pdf">
+                        <input type="file" id="file-split-pdf" class="file-input" accept=".pdf,application/pdf">
+                        <div class="dropzone-display">
+                            <div class="dropzone-icon">[^]</div>
+                            <div class="dropzone-text">Drop PDF here or browse</div>
+                            <div class="dropzone-formats">PDF files only</div>
+                        </div>
+                    </div>
+                    <div class="card-options hidden" id="options-split-pdf">
+                        <div class="file-selected">
+                            <span class="file-name" id="filename-split-pdf"></span>
+                            <span class="file-size" id="filesize-split-pdf"></span>
+                            <span class="file-pages" id="filepages-split-pdf"></span>
+                            <button class="btn-remove" id="remove-split-pdf">x</button>
+                        </div>
+                        <div class="options-row">
+                            <label for="split-page-input">Split after page</label>
+                            <input type="number" id="split-page-input" class="form-control" min="1" placeholder="Page number">
+                        </div>
+                        <button class="btn primary stretch" id="convert-split-pdf">Split PDF</button>
+                    </div>
+                    <div class="card-progress hidden" id="progress-split-pdf">
+                        <div class="progress-status">Splitting...</div>
+                    </div>
+                    <div class="card-result hidden" id="result-split-pdf">
+                        <div class="result-title">Done</div>
+                        <div class="result-file">PDF files downloaded</div>
+                        <div class="result-actions">
+                            <button class="btn ghost" id="another-split-pdf">Split another</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Merge PDFs Card -->
+            <div class="action-card" id="card-merge-pdf" data-action="merge-pdf">
+                <div class="card-header" data-card="merge-pdf">
+                    <div class="card-icon icon-merge">3</div>
+                    <div class="card-info">
+                        <div class="card-title">Merge PDFs</div>
+                        <div class="card-desc">Combine multiple files</div>
+                    </div>
+                    <button class="card-close hidden" data-close="merge-pdf">x</button>
+                </div>
+                <div class="card-body hidden" id="body-merge-pdf">
+                    <div class="card-dropzone" id="dropzone-merge-pdf">
+                        <input type="file" id="file-merge-pdf" class="file-input" accept=".pdf,application/pdf" multiple>
+                        <div class="dropzone-display">
+                            <div class="dropzone-icon">[^]</div>
+                            <div class="dropzone-text">Drop PDFs here or browse</div>
+                            <div class="dropzone-formats">Select multiple PDF files</div>
+                        </div>
+                    </div>
+                    <div class="card-options hidden" id="options-merge-pdf">
+                        <div class="merge-file-list" id="merge-file-list"></div>
+                        <button class="btn ghost stretch" id="add-more-merge-pdf">Add more files</button>
+                        <button class="btn primary stretch" id="convert-merge-pdf">Merge PDFs</button>
+                    </div>
+                    <div class="card-progress hidden" id="progress-merge-pdf">
+                        <div class="progress-status">Merging...</div>
+                    </div>
+                    <div class="card-result hidden" id="result-merge-pdf">
+                        <div class="result-title">Done</div>
+                        <div class="result-file">Merged PDF downloaded</div>
+                        <div class="result-actions">
+                            <button class="btn ghost" id="another-merge-pdf">Merge more</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Compress PDF Card -->
+            <div class="action-card" id="card-compress-pdf" data-action="compress-pdf">
+                <div class="card-header" data-card="compress-pdf">
+                    <div class="card-icon icon-compress">4</div>
+                    <div class="card-info">
+                        <div class="card-title">Compress PDF</div>
+                        <div class="card-desc">Reduce file size</div>
+                    </div>
+                    <button class="card-close hidden" data-close="compress-pdf">x</button>
+                </div>
+                <div class="card-body hidden" id="body-compress-pdf">
+                    <div class="card-dropzone" id="dropzone-compress-pdf">
+                        <input type="file" id="file-compress-pdf" class="file-input" accept=".pdf,application/pdf">
+                        <div class="dropzone-display">
+                            <div class="dropzone-icon">[^]</div>
+                            <div class="dropzone-text">Drop PDF here or browse</div>
+                            <div class="dropzone-formats">PDF files only</div>
+                        </div>
+                    </div>
+                    <div class="card-options hidden" id="options-compress-pdf">
+                        <div class="file-selected">
+                            <span class="file-name" id="filename-compress-pdf"></span>
+                            <span class="file-size" id="filesize-compress-pdf"></span>
+                            <button class="btn-remove" id="remove-compress-pdf">x</button>
+                        </div>
+                        <div class="options-row">
+                            <label>Compression</label>
+                            <div class="radio-group">
+                                <label><input type="radio" name="compress-level" value="0.95" checked> Low</label>
+                                <label><input type="radio" name="compress-level" value="0.9"> Medium</label>
+                                <label><input type="radio" name="compress-level" value="0.85"> High</label>
+                            </div>
+                        </div>
+                        <button class="btn primary stretch" id="convert-compress-pdf">Compress PDF</button>
+                    </div>
+                    <div class="card-progress hidden" id="progress-compress-pdf">
+                        <div class="progress-status" id="progress-status-compress-pdf">Compressing...</div>
+                        <div class="progress-bar-wrap">
+                            <div class="progress-bar" id="progress-bar-compress-pdf"></div>
+                        </div>
+                        <div class="progress-percent" id="progress-percent-compress-pdf">0%</div>
+                    </div>
+                    <div class="card-result hidden" id="result-compress-pdf">
+                        <div class="result-title">Done</div>
+                        <div class="result-file" id="result-file-compress-pdf">Compressed PDF downloaded</div>
+                        <div class="result-actions">
+                            <button class="btn ghost" id="another-compress-pdf">Compress another</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Images to PDF Card -->
+            <div class="action-card" id="card-images-pdf" data-action="images-pdf">
+                <div class="card-header" data-card="images-pdf">
+                    <div class="card-icon icon-images">5</div>
+                    <div class="card-info">
+                        <div class="card-title">Images to PDF</div>
+                        <div class="card-desc">Create PDF from images</div>
+                    </div>
+                    <button class="card-close hidden" data-close="images-pdf">x</button>
+                </div>
+                <div class="card-body hidden" id="body-images-pdf">
+                    <div class="card-dropzone" id="dropzone-images-pdf">
+                        <input type="file" id="file-images-pdf" class="file-input" accept="image/*" multiple>
+                        <div class="dropzone-display">
+                            <div class="dropzone-icon">[^]</div>
+                            <div class="dropzone-text">Drop images here or browse</div>
+                            <div class="dropzone-formats">JPG, PNG, WebP, GIF</div>
+                        </div>
+                    </div>
+                    <div class="card-options hidden" id="options-images-pdf">
+                        <div class="merge-file-list" id="images-file-list"></div>
+                        <button class="btn ghost stretch" id="add-more-images-pdf">Add more images</button>
+                        <button class="btn primary stretch" id="convert-images-pdf">Create PDF</button>
+                    </div>
+                    <div class="card-progress hidden" id="progress-images-pdf">
+                        <div class="progress-status" id="progress-status-images-pdf">Converting...</div>
+                        <div class="progress-bar-wrap">
+                            <div class="progress-bar" id="progress-bar-images-pdf"></div>
+                        </div>
+                        <div class="progress-percent" id="progress-percent-images-pdf">0%</div>
+                    </div>
+                    <div class="card-result hidden" id="result-images-pdf">
+                        <div class="result-title">Done</div>
+                        <div class="result-file">PDF downloaded</div>
+                        <div class="result-actions">
+                            <button class="btn ghost" id="another-images-pdf">Create another</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Resize Image Card -->
+            <div class="action-card" id="card-resize-image" data-action="resize-image">
+                <div class="card-header" data-card="resize-image">
+                    <div class="card-icon icon-resize">6</div>
+                    <div class="card-info">
+                        <div class="card-title">Resize Image</div>
+                        <div class="card-desc">Change dimensions</div>
+                    </div>
+                    <button class="card-close hidden" data-close="resize-image">x</button>
+                </div>
+                <div class="card-body hidden" id="body-resize-image">
+                    <div class="card-dropzone" id="dropzone-resize-image">
+                        <input type="file" id="file-resize-image" class="file-input" accept="image/*">
+                        <div class="dropzone-display">
+                            <div class="dropzone-icon">[^]</div>
+                            <div class="dropzone-text">Drop image here or browse</div>
+                            <div class="dropzone-formats">JPG, PNG, WebP, GIF</div>
+                        </div>
+                    </div>
+                    <div class="card-options hidden" id="options-resize-image">
+                        <div class="file-selected">
+                            <span class="file-name" id="filename-resize-image"></span>
+                            <span class="file-size" id="filesize-resize-image"></span>
+                            <button class="btn-remove" id="remove-resize-image">x</button>
+                        </div>
+                        <div class="options-row">
+                            <label for="width-resize-image">Width (px)</label>
+                            <input type="number" id="width-resize-image" class="form-control" min="1">
+                        </div>
+                        <div class="options-row">
+                            <label for="height-resize-image">Height (px)</label>
+                            <input type="number" id="height-resize-image" class="form-control" min="1">
+                        </div>
+                        <div class="options-row">
+                            <label><input type="checkbox" id="lock-resize-image" checked> Lock proportions</label>
+                        </div>
+                        <button class="btn primary stretch" id="convert-resize-image">Resize</button>
+                    </div>
+                    <div class="card-result hidden" id="result-resize-image">
+                        <div class="result-title">Done</div>
+                        <div class="result-file">Resized image downloaded</div>
+                        <div class="result-actions">
+                            <button class="btn ghost" id="another-resize-image">Resize another</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Convert Image Card -->
+            <div class="action-card" id="card-convert-image" data-action="convert-image">
+                <div class="card-header" data-card="convert-image">
+                    <div class="card-icon icon-convert">7</div>
+                    <div class="card-info">
+                        <div class="card-title">Convert Image</div>
+                        <div class="card-desc">Change format</div>
+                    </div>
+                    <button class="card-close hidden" data-close="convert-image">x</button>
+                </div>
+                <div class="card-body hidden" id="body-convert-image">
+                    <div class="card-dropzone" id="dropzone-convert-image">
+                        <input type="file" id="file-convert-image" class="file-input" accept="image/*">
+                        <div class="dropzone-display">
+                            <div class="dropzone-icon">[^]</div>
+                            <div class="dropzone-text">Drop image here or browse</div>
+                            <div class="dropzone-formats">JPG, PNG, WebP, GIF</div>
+                        </div>
+                    </div>
+                    <div class="card-options hidden" id="options-convert-image">
+                        <div class="file-selected">
+                            <span class="file-name" id="filename-convert-image"></span>
+                            <span class="file-size" id="filesize-convert-image"></span>
+                            <button class="btn-remove" id="remove-convert-image">x</button>
+                        </div>
+                        <div class="options-row">
+                            <label for="format-convert-image">Convert to</label>
+                            <select id="format-convert-image" class="form-control">
+                                <option value="image/jpeg">JPEG</option>
+                                <option value="image/png">PNG</option>
+                                <option value="image/webp">WebP</option>
+                                <option value="image/gif">GIF</option>
+                            </select>
+                        </div>
+                        <button class="btn primary stretch" id="convert-convert-image">Convert</button>
+                    </div>
+                    <div class="card-result hidden" id="result-convert-image">
+                        <div class="result-title">Done</div>
+                        <div class="result-file">Converted image downloaded</div>
+                        <div class="result-actions">
+                            <button class="btn ghost" id="another-convert-image">Convert another</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Compress Image Card -->
+            <div class="action-card" id="card-compress-image" data-action="compress-image">
+                <div class="card-header" data-card="compress-image">
+                    <div class="card-icon icon-compress">8</div>
+                    <div class="card-info">
+                        <div class="card-title">Compress Image</div>
+                        <div class="card-desc">Reduce file size</div>
+                    </div>
+                    <button class="card-close hidden" data-close="compress-image">x</button>
+                </div>
+                <div class="card-body hidden" id="body-compress-image">
+                    <div class="card-dropzone" id="dropzone-compress-image">
+                        <input type="file" id="file-compress-image" class="file-input" accept="image/*">
+                        <div class="dropzone-display">
+                            <div class="dropzone-icon">[^]</div>
+                            <div class="dropzone-text">Drop image here or browse</div>
+                            <div class="dropzone-formats">JPG, PNG, WebP, GIF</div>
+                        </div>
+                    </div>
+                    <div class="card-options hidden" id="options-compress-image">
+                        <div class="file-selected">
+                            <span class="file-name" id="filename-compress-image"></span>
+                            <span class="file-size" id="filesize-compress-image"></span>
+                            <button class="btn-remove" id="remove-compress-image">x</button>
+                        </div>
+                        <div class="options-row">
+                            <label for="quality-compress-image">Quality</label>
+                            <input type="range" id="quality-compress-image" class="form-control" min="10" max="100" value="80" step="5">
+                            <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 4px;">
+                                <span>Smaller file</span>
+                                <span id="quality-value-compress-image">80%</span>
+                                <span>Better quality</span>
+                            </div>
+                        </div>
+                        <button class="btn primary stretch" id="convert-compress-image">Compress</button>
+                    </div>
+                    <div class="card-result hidden" id="result-compress-image">
+                        <div class="result-title">Done</div>
+                        <div class="result-file" id="result-file-compress-image"></div>
+                        <div class="result-actions">
+                            <button class="btn ghost" id="another-compress-image">Compress another</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Video to Audio Card -->
+            <div class="action-card" id="card-video-audio" data-action="video-audio">
+                <div class="card-header" data-card="video-audio">
+                    <div class="card-icon icon-video">9</div>
+                    <div class="card-info">
+                        <div class="card-title">Video to Audio</div>
+                        <div class="card-desc">Extract MP3, WAV, M4A, OGG</div>
+                    </div>
+                    <button class="card-close hidden" data-close="video-audio">x</button>
+                </div>
+                <div class="card-body hidden" id="body-video-audio">
+                    <!-- File drop zone -->
+                    <div class="card-dropzone" id="dropzone-video-audio">
+                        <input type="file" id="file-video-audio" class="file-input" accept="video/*,.mp4,.mov,.avi,.mkv,.webm,.m4v,.wmv,.flv">
+                        <div class="dropzone-display">
+                            <div class="dropzone-icon">[^]</div>
+                            <div class="dropzone-text">Drop video here or browse</div>
+                            <div class="dropzone-formats">MP4, MOV, AVI, MKV, WebM - up to 2GB</div>
+                        </div>
+                    </div>
+                    <!-- File info + options (shown after file selected) -->
+                    <div class="card-options hidden" id="options-video-audio">
+                        <div class="file-selected">
+                            <span class="file-name" id="filename-video-audio"></span>
+                            <span class="file-size" id="filesize-video-audio"></span>
+                            <button class="btn-remove" id="remove-video-audio">x</button>
+                        </div>
+                        <div class="options-row">
+                            <label for="format-video-audio">Format</label>
+                            <select id="format-video-audio" class="form-control">
+                                <option value="mp3">MP3</option>
+                                <option value="wav">WAV</option>
+                                <option value="m4a">M4A</option>
+                                <option value="ogg">OGG</option>
+                            </select>
+                        </div>
+                        <div class="options-row" id="bitrate-row-video-audio">
+                            <label for="bitrate-video-audio">Quality</label>
+                            <select id="bitrate-video-audio" class="form-control">
+                                <option value="128k">128 kbps</option>
+                                <option value="192k" selected>192 kbps</option>
+                                <option value="320k">320 kbps</option>
+                            </select>
+                        </div>
+                        <button class="btn primary stretch" id="convert-video-audio">Convert</button>
+                    </div>
+                    <!-- Progress (shown during conversion) -->
+                    <div class="card-progress hidden" id="progress-video-audio">
+                        <div class="progress-status" id="progress-status-video-audio">Processing...</div>
+                        <div class="progress-bar-wrap">
+                            <div class="progress-bar" id="progress-bar-video-audio"></div>
+                        </div>
+                        <div class="progress-percent" id="progress-percent-video-audio">0%</div>
+                        <div class="progress-note">Keep this tab open</div>
+                    </div>
+                    <!-- Result (shown after completion) -->
+                    <div class="card-result hidden" id="result-video-audio">
+                        <div class="result-title">Done</div>
+                        <div class="result-file" id="result-file-video-audio"></div>
+                        <div class="result-actions">
+                            <button class="btn primary" id="download-video-audio">Download</button>
+                            <button class="btn ghost" id="another-video-audio">Convert another</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Video to MP4 Card -->
+            <div class="action-card" id="card-video-mp4" data-action="video-mp4">
+                <div class="card-header" data-card="video-mp4">
+                    <div class="card-icon icon-video">10</div>
+                    <div class="card-info">
+                        <div class="card-title">Video → MP4</div>
+                        <div class="card-desc">Universal format</div>
+                    </div>
+                    <button class="card-close hidden" data-close="video-mp4">x</button>
+                </div>
+                <div class="card-body hidden" id="body-video-mp4">
+                    <div class="card-dropzone" id="dropzone-video-mp4">
+                        <input type="file" id="file-video-mp4" class="file-input" accept="video/*">
+                        <div class="dropzone-display">
+                            <div class="dropzone-icon">[^]</div>
+                            <div class="dropzone-text">Drop video here or browse</div>
+                            <div class="dropzone-formats">Any video format</div>
+                        </div>
+                    </div>
+                    <div class="card-options hidden" id="options-video-mp4">
+                        <div class="file-selected">
+                            <span class="file-name" id="filename-video-mp4"></span>
+                            <span class="file-size" id="filesize-video-mp4"></span>
+                            <button class="btn-remove" id="remove-video-mp4">x</button>
+                        </div>
+                        <button class="btn primary stretch" id="convert-video-mp4">Convert to MP4</button>
+                    </div>
+                    <div class="card-progress hidden" id="progress-video-mp4">
+                        <div class="progress-status" id="progress-status-video-mp4">Processing...</div>
+                        <div class="progress-bar-wrap">
+                            <div class="progress-bar" id="progress-bar-video-mp4"></div>
+                        </div>
+                        <div class="progress-percent" id="progress-percent-video-mp4">0%</div>
+                        <div class="progress-note">Keep this tab open</div>
+                    </div>
+                    <div class="card-result hidden" id="result-video-mp4">
+                        <div class="result-title">Done</div>
+                        <div class="result-file" id="result-file-video-mp4"></div>
+                        <div class="result-actions">
+                            <button class="btn primary" id="download-video-mp4">Download</button>
+                            <button class="btn ghost" id="another-video-mp4">Convert another</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Video Compress Card -->
+            <div class="action-card" id="card-video-compress" data-action="video-compress">
+                <div class="card-header" data-card="video-compress">
+                    <div class="card-icon icon-compress">11</div>
+                    <div class="card-info">
+                        <div class="card-title">Video Compress</div>
+                        <div class="card-desc">Smaller MP4</div>
+                    </div>
+                    <button class="card-close hidden" data-close="video-compress">x</button>
+                </div>
+                <div class="card-body hidden" id="body-video-compress">
+                    <div class="card-dropzone" id="dropzone-video-compress">
+                        <input type="file" id="file-video-compress" class="file-input" accept="video/*">
+                        <div class="dropzone-display">
+                            <div class="dropzone-icon">[^]</div>
+                            <div class="dropzone-text">Drop video here or browse</div>
+                            <div class="dropzone-formats">MP4, MOV, AVI, etc.</div>
+                        </div>
+                    </div>
+                    <div class="card-options hidden" id="options-video-compress">
+                        <div class="file-selected">
+                            <span class="file-name" id="filename-video-compress"></span>
+                            <span class="file-size" id="filesize-video-compress"></span>
+                            <button class="btn-remove" id="remove-video-compress">x</button>
+                        </div>
+                        <div class="options-row">
+                            <label>Quality</label>
+                            <div class="radio-group">
+                                <label><input type="radio" name="compress-quality" value="28"> High</label>
+                                <label><input type="radio" name="compress-quality" value="32" checked> Medium</label>
+                                <label><input type="radio" name="compress-quality" value="36"> Low</label>
+                            </div>
+                        </div>
+                        <button class="btn primary stretch" id="convert-video-compress">Compress</button>
+                    </div>
+                    <div class="card-progress hidden" id="progress-video-compress">
+                        <div class="progress-status" id="progress-status-video-compress">Compressing...</div>
+                        <div class="progress-bar-wrap">
+                            <div class="progress-bar" id="progress-bar-video-compress"></div>
+                        </div>
+                        <div class="progress-percent" id="progress-percent-video-compress">0%</div>
+                        <div class="progress-note">Keep this tab open</div>
+                    </div>
+                    <div class="card-result hidden" id="result-video-compress">
+                        <div class="result-title">Done</div>
+                        <div class="result-file" id="result-file-video-compress"></div>
+                        <div class="result-actions">
+                            <button class="btn primary" id="download-video-compress">Download</button>
+                            <button class="btn ghost" id="another-video-compress">Convert another</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Trim Video Card -->
+            <div class="action-card" id="card-trim-video" data-action="trim-video">
+                <div class="card-header" data-card="trim-video">
+                    <div class="card-icon icon-split">12</div>
+                    <div class="card-info">
+                        <div class="card-title">Trim Video</div>
+                        <div class="card-desc">Cut start/end</div>
+                    </div>
+                    <button class="card-close hidden" data-close="trim-video">x</button>
+                </div>
+                <div class="card-body hidden" id="body-trim-video">
+                    <div class="card-dropzone" id="dropzone-trim-video">
+                        <input type="file" id="file-trim-video" class="file-input" accept="video/*">
+                        <div class="dropzone-display">
+                            <div class="dropzone-icon">[^]</div>
+                            <div class="dropzone-text">Drop video here or browse</div>
+                            <div class="dropzone-formats">Any video format</div>
+                        </div>
+                    </div>
+                    <div class="card-options hidden" id="options-trim-video">
+                        <div class="file-selected">
+                            <span class="file-name" id="filename-trim-video"></span>
+                            <span class="file-size" id="filesize-trim-video"></span>
+                            <button class="btn-remove" id="remove-trim-video">x</button>
+                        </div>
+                        <div class="options-row">
+                            <label for="start-trim-video">Start time (seconds)</label>
+                            <input type="number" id="start-trim-video" class="form-control" min="0" value="0" step="0.1">
+                        </div>
+                        <div class="options-row">
+                            <label for="end-trim-video">End time (seconds, 0 = end)</label>
+                            <input type="number" id="end-trim-video" class="form-control" min="0" value="0" step="0.1">
+                        </div>
+                        <button class="btn primary stretch" id="convert-trim-video">Trim Video</button>
+                    </div>
+                    <div class="card-progress hidden" id="progress-trim-video">
+                        <div class="progress-status" id="progress-status-trim-video">Trimming...</div>
+                        <div class="progress-bar-wrap">
+                            <div class="progress-bar" id="progress-bar-trim-video"></div>
+                        </div>
+                        <div class="progress-percent" id="progress-percent-trim-video">0%</div>
+                        <div class="progress-note">Keep this tab open</div>
+                    </div>
+                    <div class="card-result hidden" id="result-trim-video">
+                        <div class="result-title">Done</div>
+                        <div class="result-file" id="result-file-trim-video"></div>
+                        <div class="result-actions">
+                            <button class="btn primary" id="download-trim-video">Download</button>
+                            <button class="btn ghost" id="another-trim-video">Trim another</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Video to GIF Card -->
+            <div class="action-card" id="card-video-gif" data-action="video-gif">
+                <div class="card-header" data-card="video-gif">
+                    <div class="card-icon icon-images">13</div>
+                    <div class="card-info">
+                        <div class="card-title">Video → GIF</div>
+                        <div class="card-desc">Animated clip</div>
+                    </div>
+                    <button class="card-close hidden" data-close="video-gif">x</button>
+                </div>
+                <div class="card-body hidden" id="body-video-gif">
+                    <div class="card-dropzone" id="dropzone-video-gif">
+                        <input type="file" id="file-video-gif" class="file-input" accept="video/*">
+                        <div class="dropzone-display">
+                            <div class="dropzone-icon">[^]</div>
+                            <div class="dropzone-text">Drop video here or browse</div>
+                            <div class="dropzone-formats">Short clips work best</div>
+                        </div>
+                    </div>
+                    <div class="card-options hidden" id="options-video-gif">
+                        <div class="file-selected">
+                            <span class="file-name" id="filename-video-gif"></span>
+                            <span class="file-size" id="filesize-video-gif"></span>
+                            <button class="btn-remove" id="remove-video-gif">x</button>
+                        </div>
+                        <div class="options-row">
+                            <label for="start-video-gif">Start (seconds)</label>
+                            <input type="number" id="start-video-gif" class="form-control" min="0" value="0" step="0.1">
+                        </div>
+                        <div class="options-row">
+                            <label for="duration-video-gif">Duration (seconds, max 10)</label>
+                            <input type="number" id="duration-video-gif" class="form-control" min="0.5" max="10" value="3" step="0.5">
+                        </div>
+                        <div class="options-row">
+                            <label for="fps-video-gif">Frame rate</label>
+                            <select id="fps-video-gif" class="form-control">
+                                <option value="10">10 fps (smaller)</option>
+                                <option value="15" selected>15 fps</option>
+                                <option value="20">20 fps (smoother)</option>
+                            </select>
+                        </div>
+                        <div class="options-row">
+                            <label for="width-video-gif">Width (px)</label>
+                            <input type="number" id="width-video-gif" class="form-control" min="100" max="800" value="480">
+                        </div>
+                        <button class="btn primary stretch" id="convert-video-gif">Create GIF</button>
+                    </div>
+                    <div class="card-progress hidden" id="progress-video-gif">
+                        <div class="progress-status" id="progress-status-video-gif">Creating GIF...</div>
+                        <div class="progress-bar-wrap">
+                            <div class="progress-bar" id="progress-bar-video-gif"></div>
+                        </div>
+                        <div class="progress-percent" id="progress-percent-video-gif">0%</div>
+                        <div class="progress-note">Keep this tab open</div>
+                    </div>
+                    <div class="card-result hidden" id="result-video-gif">
+                        <div class="result-title">Done</div>
+                        <div class="result-file" id="result-file-video-gif"></div>
+                        <div class="result-actions">
+                            <button class="btn primary" id="download-video-gif">Download</button>
+                            <button class="btn ghost" id="another-video-gif">Create another</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Audio to MP3 Card -->
+            <div class="action-card" id="card-audio-mp3" data-action="audio-mp3">
+                <div class="card-header" data-card="audio-mp3">
+                    <div class="card-icon icon-convert">14</div>
+                    <div class="card-info">
+                        <div class="card-title">Audio → MP3</div>
+                        <div class="card-desc">Universal format</div>
+                    </div>
+                    <button class="card-close hidden" data-close="audio-mp3">x</button>
+                </div>
+                <div class="card-body hidden" id="body-audio-mp3">
+                    <div class="card-dropzone" id="dropzone-audio-mp3">
+                        <input type="file" id="file-audio-mp3" class="file-input" accept="audio/*">
+                        <div class="dropzone-display">
+                            <div class="dropzone-icon">[^]</div>
+                            <div class="dropzone-text">Drop audio here or browse</div>
+                            <div class="dropzone-formats">WAV, M4A, OGG, FLAC, etc.</div>
+                        </div>
+                    </div>
+                    <div class="card-options hidden" id="options-audio-mp3">
+                        <div class="file-selected">
+                            <span class="file-name" id="filename-audio-mp3"></span>
+                            <span class="file-size" id="filesize-audio-mp3"></span>
+                            <button class="btn-remove" id="remove-audio-mp3">x</button>
+                        </div>
+                        <div class="options-row">
+                            <label for="bitrate-audio-mp3">Quality</label>
+                            <select id="bitrate-audio-mp3" class="form-control">
+                                <option value="128k">128 kbps</option>
+                                <option value="192k" selected>192 kbps</option>
+                                <option value="320k">320 kbps</option>
+                            </select>
+                        </div>
+                        <button class="btn primary stretch" id="convert-audio-mp3">Convert to MP3</button>
+                    </div>
+                    <div class="card-progress hidden" id="progress-audio-mp3">
+                        <div class="progress-status" id="progress-status-audio-mp3">Converting...</div>
+                        <div class="progress-bar-wrap">
+                            <div class="progress-bar" id="progress-bar-audio-mp3"></div>
+                        </div>
+                        <div class="progress-percent" id="progress-percent-audio-mp3">0%</div>
+                        <div class="progress-note">Keep this tab open</div>
+                    </div>
+                    <div class="card-result hidden" id="result-audio-mp3">
+                        <div class="result-title">Done</div>
+                        <div class="result-file" id="result-file-audio-mp3"></div>
+                        <div class="result-actions">
+                            <button class="btn primary" id="download-audio-mp3">Download</button>
+                            <button class="btn ghost" id="another-audio-mp3">Convert another</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Audio Compress Card -->
+            <div class="action-card" id="card-audio-compress" data-action="audio-compress">
+                <div class="card-header" data-card="audio-compress">
+                    <div class="card-icon icon-compress">15</div>
+                    <div class="card-info">
+                        <div class="card-title">Audio Compress</div>
+                        <div class="card-desc">Smaller file</div>
+                    </div>
+                    <button class="card-close hidden" data-close="audio-compress">x</button>
+                </div>
+                <div class="card-body hidden" id="body-audio-compress">
+                    <div class="card-dropzone" id="dropzone-audio-compress">
+                        <input type="file" id="file-audio-compress" class="file-input" accept="audio/*">
+                        <div class="dropzone-display">
+                            <div class="dropzone-icon">[^]</div>
+                            <div class="dropzone-text">Drop audio here or browse</div>
+                            <div class="dropzone-formats">Any audio format</div>
+                        </div>
+                    </div>
+                    <div class="card-options hidden" id="options-audio-compress">
+                        <div class="file-selected">
+                            <span class="file-name" id="filename-audio-compress"></span>
+                            <span class="file-size" id="filesize-audio-compress"></span>
+                            <button class="btn-remove" id="remove-audio-compress">x</button>
+                        </div>
+                        <div class="options-row">
+                            <label for="bitrate-audio-compress">Bitrate</label>
+                            <select id="bitrate-audio-compress" class="form-control">
+                                <option value="64k">64 kbps (voice)</option>
+                                <option value="96k">96 kbps</option>
+                                <option value="128k" selected>128 kbps</option>
+                                <option value="192k">192 kbps</option>
+                            </select>
+                        </div>
+                        <button class="btn primary stretch" id="convert-audio-compress">Compress</button>
+                    </div>
+                    <div class="card-progress hidden" id="progress-audio-compress">
+                        <div class="progress-status" id="progress-status-audio-compress">Compressing...</div>
+                        <div class="progress-bar-wrap">
+                            <div class="progress-bar" id="progress-bar-audio-compress"></div>
+                        </div>
+                        <div class="progress-percent" id="progress-percent-audio-compress">0%</div>
+                        <div class="progress-note">Keep this tab open</div>
+                    </div>
+                    <div class="card-result hidden" id="result-audio-compress">
+                        <div class="result-title">Done</div>
+                        <div class="result-file" id="result-file-audio-compress"></div>
+                        <div class="result-actions">
+                            <button class="btn primary" id="download-audio-compress">Download</button>
+                            <button class="btn ghost" id="another-audio-compress">Compress another</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Trim Audio Card -->
+            <div class="action-card" id="card-trim-audio" data-action="trim-audio">
+                <div class="card-header" data-card="trim-audio">
+                    <div class="card-icon icon-split">16</div>
+                    <div class="card-info">
+                        <div class="card-title">Trim Audio</div>
+                        <div class="card-desc">Cut start/end</div>
+                    </div>
+                    <button class="card-close hidden" data-close="trim-audio">x</button>
+                </div>
+                <div class="card-body hidden" id="body-trim-audio">
+                    <div class="card-dropzone" id="dropzone-trim-audio">
+                        <input type="file" id="file-trim-audio" class="file-input" accept="audio/*">
+                        <div class="dropzone-display">
+                            <div class="dropzone-icon">[^]</div>
+                            <div class="dropzone-text">Drop audio here or browse</div>
+                            <div class="dropzone-formats">Any audio format</div>
+                        </div>
+                    </div>
+                    <div class="card-options hidden" id="options-trim-audio">
+                        <div class="file-selected">
+                            <span class="file-name" id="filename-trim-audio"></span>
+                            <span class="file-size" id="filesize-trim-audio"></span>
+                            <button class="btn-remove" id="remove-trim-audio">x</button>
+                        </div>
+                        <div class="options-row">
+                            <label for="start-trim-audio">Start time (seconds)</label>
+                            <input type="number" id="start-trim-audio" class="form-control" min="0" value="0" step="0.1">
+                        </div>
+                        <div class="options-row">
+                            <label for="end-trim-audio">End time (seconds, 0 = end)</label>
+                            <input type="number" id="end-trim-audio" class="form-control" min="0" value="0" step="0.1">
+                        </div>
+                        <button class="btn primary stretch" id="convert-trim-audio">Trim Audio</button>
+                    </div>
+                    <div class="card-progress hidden" id="progress-trim-audio">
+                        <div class="progress-status" id="progress-status-trim-audio">Trimming...</div>
+                        <div class="progress-bar-wrap">
+                            <div class="progress-bar" id="progress-bar-trim-audio"></div>
+                        </div>
+                        <div class="progress-percent" id="progress-percent-trim-audio">0%</div>
+                        <div class="progress-note">Keep this tab open</div>
+                    </div>
+                    <div class="card-result hidden" id="result-trim-audio">
+                        <div class="result-title">Done</div>
+                        <div class="result-file" id="result-file-trim-audio"></div>
+                        <div class="result-actions">
+                            <button class="btn primary" id="download-trim-audio">Download</button>
+                            <button class="btn ghost" id="another-trim-audio">Trim another</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Normalize Audio Card -->
+            <div class="action-card" id="card-normalize-audio" data-action="normalize-audio">
+                <div class="card-header" data-card="normalize-audio">
+                    <div class="card-icon icon-merge">17</div>
+                    <div class="card-info">
+                        <div class="card-title">Normalize Audio</div>
+                        <div class="card-desc">Fix volume</div>
+                    </div>
+                    <button class="card-close hidden" data-close="normalize-audio">x</button>
+                </div>
+                <div class="card-body hidden" id="body-normalize-audio">
+                    <div class="card-dropzone" id="dropzone-normalize-audio">
+                        <input type="file" id="file-normalize-audio" class="file-input" accept="audio/*">
+                        <div class="dropzone-display">
+                            <div class="dropzone-icon">[^]</div>
+                            <div class="dropzone-text">Drop audio here or browse</div>
+                            <div class="dropzone-formats">Any audio format</div>
+                        </div>
+                    </div>
+                    <div class="card-options hidden" id="options-normalize-audio">
+                        <div class="file-selected">
+                            <span class="file-name" id="filename-normalize-audio"></span>
+                            <span class="file-size" id="filesize-normalize-audio"></span>
+                            <button class="btn-remove" id="remove-normalize-audio">x</button>
+                        </div>
+                        <div class="options-row">
+                            <label>Target level</label>
+                            <div class="radio-group">
+                                <label><input type="radio" name="normalize-level" value="-16" checked> Podcast</label>
+                                <label><input type="radio" name="normalize-level" value="-23"> Speech</label>
+                                <label><input type="radio" name="normalize-level" value="-14"> Music</label>
+                            </div>
+                        </div>
+                        <button class="btn primary stretch" id="convert-normalize-audio">Normalize</button>
+                    </div>
+                    <div class="card-progress hidden" id="progress-normalize-audio">
+                        <div class="progress-status" id="progress-status-normalize-audio">Normalizing...</div>
+                        <div class="progress-bar-wrap">
+                            <div class="progress-bar" id="progress-bar-normalize-audio"></div>
+                        </div>
+                        <div class="progress-percent" id="progress-percent-normalize-audio">0%</div>
+                        <div class="progress-note">Keep this tab open</div>
+                    </div>
+                    <div class="card-result hidden" id="result-normalize-audio">
+                        <div class="result-title">Done</div>
+                        <div class="result-file" id="result-file-normalize-audio"></div>
+                        <div class="result-actions">
+                            <button class="btn primary" id="download-normalize-audio">Download</button>
+                            <button class="btn ghost" id="another-normalize-audio">Normalize another</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Remove Metadata Card -->
+            <div class="action-card" id="card-remove-metadata" data-action="remove-metadata">
+                <div class="card-header" data-card="remove-metadata">
+                    <div class="card-icon icon-metadata">18</div>
+                    <div class="card-info">
+                        <div class="card-title">Remove Metadata</div>
+                        <div class="card-desc">Strip all metadata from files</div>
+                    </div>
+                    <button class="card-close hidden" data-close="remove-metadata">x</button>
+                </div>
+                <div class="card-body hidden" id="body-remove-metadata">
+                    <div class="card-dropzone" id="dropzone-remove-metadata">
+                        <input type="file" id="file-remove-metadata" class="file-input" accept="*/*">
+                        <div class="dropzone-display">
+                            <div class="dropzone-icon">[^]</div>
+                            <div class="dropzone-text">Drop any file here or browse</div>
+                            <div class="dropzone-formats">Images, Videos, PDFs, Audio - All file types</div>
+                        </div>
+                    </div>
+                    <div class="card-options hidden" id="options-remove-metadata">
+                        <div class="file-selected">
+                            <span class="file-name" id="filename-remove-metadata"></span>
+                            <span class="file-size" id="filesize-remove-metadata"></span>
+                            <button class="btn-remove" id="remove-remove-metadata">x</button>
+                        </div>
+                        <button class="btn primary stretch" id="convert-remove-metadata">Remove Metadata</button>
+                    </div>
+                    <div class="card-progress hidden" id="progress-remove-metadata">
+                        <div class="progress-status" id="progress-status-remove-metadata">Removing metadata...</div>
+                        <div class="progress-bar-wrap">
+                            <div class="progress-bar" id="progress-bar-remove-metadata"></div>
+                        </div>
+                        <div class="progress-percent" id="progress-percent-remove-metadata">0%</div>
+                    </div>
+                    <div class="card-result hidden" id="result-remove-metadata">
+                        <div class="result-title">Done</div>
+                        <div class="result-file" id="result-file-remove-metadata"></div>
+                        <div class="result-actions">
+                            <button class="btn primary" id="download-remove-metadata">Download</button>
+                            <button class="btn ghost" id="another-remove-metadata">Remove from another</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Error Panel -->
+        <section class="error-panel hidden" id="errorPanel">
+            <div class="error-content">
+                <div class="error-title">Error</div>
+                <div class="error-message" id="errorMessage"></div>
+                <button class="btn ghost" id="errorDismiss">Dismiss</button>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer-text">
+                100% local processing - nothing uploads - your files stay private
+            </div>
+        </footer>
+    </div>
+
+    <!-- Scripts -->
+    <script src="ffmpeg-manager.js"></script>
+    <script src="converter.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
