@@ -53,7 +53,7 @@
         <!-- Action Cards Grid -->
         <section class="action-grid" id="actionGrid">
             <!-- PDF to Images Card -->
-            <div class="action-card" id="card-pdf-images" data-action="pdf-images">
+            <div class="action-card cat-pdf" id="card-pdf-images" data-action="pdf-images">
                 <div class="card-header" data-card="pdf-images">
                     <div class="card-icon icon-pdf">1</div>
                     <div class="card-info">
@@ -107,7 +107,7 @@
             </div>
 
             <!-- Split PDF Card -->
-            <div class="action-card" id="card-split-pdf" data-action="split-pdf">
+            <div class="action-card cat-pdf" id="card-split-pdf" data-action="split-pdf">
                 <div class="card-header" data-card="split-pdf">
                     <div class="card-icon icon-split">2</div>
                     <div class="card-info">
@@ -152,7 +152,7 @@
             </div>
 
             <!-- Merge PDFs Card -->
-            <div class="action-card" id="card-merge-pdf" data-action="merge-pdf">
+            <div class="action-card cat-pdf" id="card-merge-pdf" data-action="merge-pdf">
                 <div class="card-header" data-card="merge-pdf">
                     <div class="card-icon icon-merge">3</div>
                     <div class="card-info">
@@ -189,7 +189,7 @@
             </div>
 
             <!-- Compress PDF Card -->
-            <div class="action-card" id="card-compress-pdf" data-action="compress-pdf">
+            <div class="action-card cat-pdf" id="card-compress-pdf" data-action="compress-pdf">
                 <div class="card-header" data-card="compress-pdf">
                     <div class="card-icon icon-compress">4</div>
                     <div class="card-info">
@@ -241,7 +241,7 @@
             </div>
 
             <!-- Images to PDF Card -->
-            <div class="action-card" id="card-images-pdf" data-action="images-pdf">
+            <div class="action-card cat-pdf" id="card-images-pdf" data-action="images-pdf">
                 <div class="card-header" data-card="images-pdf">
                     <div class="card-icon icon-images">5</div>
                     <div class="card-info">
@@ -282,7 +282,7 @@
             </div>
 
             <!-- Resize Image Card -->
-            <div class="action-card" id="card-resize-image" data-action="resize-image">
+            <div class="action-card cat-image" id="card-resize-image" data-action="resize-image">
                 <div class="card-header" data-card="resize-image">
                     <div class="card-icon icon-resize">6</div>
                     <div class="card-info">
@@ -330,7 +330,7 @@
             </div>
 
             <!-- Convert Image Card -->
-            <div class="action-card" id="card-convert-image" data-action="convert-image">
+            <div class="action-card cat-image" id="card-convert-image" data-action="convert-image">
                 <div class="card-header" data-card="convert-image">
                     <div class="card-icon icon-convert">7</div>
                     <div class="card-info">
@@ -376,7 +376,7 @@
             </div>
 
             <!-- Compress Image Card -->
-            <div class="action-card" id="card-compress-image" data-action="compress-image">
+            <div class="action-card cat-image" id="card-compress-image" data-action="compress-image">
                 <div class="card-header" data-card="compress-image">
                     <div class="card-icon icon-compress">8</div>
                     <div class="card-info">
@@ -421,10 +421,55 @@
                 </div>
             </div>
 
+            <!-- Remove Metadata Card -->
+            <div class="action-card cat-image" id="card-remove-metadata" data-action="remove-metadata">
+                <div class="card-header" data-card="remove-metadata">
+                    <div class="card-icon icon-metadata">9</div>
+                    <div class="card-info">
+                        <div class="card-title">Remove Metadata</div>
+                        <div class="card-desc">Strip all metadata from files</div>
+                    </div>
+                    <button class="card-close hidden" data-close="remove-metadata">x</button>
+                </div>
+                <div class="card-body hidden" id="body-remove-metadata">
+                    <div class="card-dropzone" id="dropzone-remove-metadata">
+                        <input type="file" id="file-remove-metadata" class="file-input" accept="*/*">
+                        <div class="dropzone-display">
+                            <div class="dropzone-icon">[^]</div>
+                            <div class="dropzone-text">Drop any file here or browse</div>
+                            <div class="dropzone-formats">Images, Videos, PDFs, Audio - All file types</div>
+                        </div>
+                    </div>
+                    <div class="card-options hidden" id="options-remove-metadata">
+                        <div class="file-selected">
+                            <span class="file-name" id="filename-remove-metadata"></span>
+                            <span class="file-size" id="filesize-remove-metadata"></span>
+                            <button class="btn-remove" id="remove-remove-metadata">x</button>
+                        </div>
+                        <button class="btn primary stretch" id="convert-remove-metadata">Remove Metadata</button>
+                    </div>
+                    <div class="card-progress hidden" id="progress-remove-metadata">
+                        <div class="progress-status" id="progress-status-remove-metadata">Removing metadata...</div>
+                        <div class="progress-bar-wrap">
+                            <div class="progress-bar" id="progress-bar-remove-metadata"></div>
+                        </div>
+                        <div class="progress-percent" id="progress-percent-remove-metadata">0%</div>
+                    </div>
+                    <div class="card-result hidden" id="result-remove-metadata">
+                        <div class="result-title">Done</div>
+                        <div class="result-file" id="result-file-remove-metadata"></div>
+                        <div class="result-actions">
+                            <button class="btn primary" id="download-remove-metadata">Download</button>
+                            <button class="btn ghost" id="another-remove-metadata">Remove from another</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Video to Audio Card -->
-            <div class="action-card" id="card-video-audio" data-action="video-audio">
+            <div class="action-card cat-video" id="card-video-audio" data-action="video-audio">
                 <div class="card-header" data-card="video-audio">
-                    <div class="card-icon icon-video">9</div>
+                    <div class="card-icon icon-video">10</div>
                     <div class="card-info">
                         <div class="card-title">Video to Audio</div>
                         <div class="card-desc">Extract MP3, WAV, M4A, OGG</div>
@@ -489,9 +534,9 @@
             </div>
 
             <!-- Video to MP4 Card -->
-            <div class="action-card" id="card-video-mp4" data-action="video-mp4">
+            <div class="action-card cat-video" id="card-video-mp4" data-action="video-mp4">
                 <div class="card-header" data-card="video-mp4">
-                    <div class="card-icon icon-video">10</div>
+                    <div class="card-icon icon-video">11</div>
                     <div class="card-info">
                         <div class="card-title">Video → MP4</div>
                         <div class="card-desc">Universal format</div>
@@ -535,9 +580,9 @@
             </div>
 
             <!-- Video Compress Card -->
-            <div class="action-card" id="card-video-compress" data-action="video-compress">
+            <div class="action-card cat-video" id="card-video-compress" data-action="video-compress">
                 <div class="card-header" data-card="video-compress">
-                    <div class="card-icon icon-compress">11</div>
+                    <div class="card-icon icon-compress">12</div>
                     <div class="card-info">
                         <div class="card-title">Video Compress</div>
                         <div class="card-desc">Smaller MP4</div>
@@ -589,9 +634,9 @@
             </div>
 
             <!-- Trim Video Card -->
-            <div class="action-card" id="card-trim-video" data-action="trim-video">
+            <div class="action-card cat-video" id="card-trim-video" data-action="trim-video">
                 <div class="card-header" data-card="trim-video">
-                    <div class="card-icon icon-split">12</div>
+                    <div class="card-icon icon-split">13</div>
                     <div class="card-info">
                         <div class="card-title">Trim Video</div>
                         <div class="card-desc">Cut start/end</div>
@@ -643,9 +688,9 @@
             </div>
 
             <!-- Video to GIF Card -->
-            <div class="action-card" id="card-video-gif" data-action="video-gif">
+            <div class="action-card cat-video" id="card-video-gif" data-action="video-gif">
                 <div class="card-header" data-card="video-gif">
-                    <div class="card-icon icon-images">13</div>
+                    <div class="card-icon icon-images">14</div>
                     <div class="card-info">
                         <div class="card-title">Video → GIF</div>
                         <div class="card-desc">Animated clip</div>
@@ -709,9 +754,9 @@
             </div>
 
             <!-- Audio to MP3 Card -->
-            <div class="action-card" id="card-audio-mp3" data-action="audio-mp3">
+            <div class="action-card cat-audio" id="card-audio-mp3" data-action="audio-mp3">
                 <div class="card-header" data-card="audio-mp3">
-                    <div class="card-icon icon-convert">14</div>
+                    <div class="card-icon icon-convert">15</div>
                     <div class="card-info">
                         <div class="card-title">Audio → MP3</div>
                         <div class="card-desc">Universal format</div>
@@ -763,9 +808,9 @@
             </div>
 
             <!-- Audio Compress Card -->
-            <div class="action-card" id="card-audio-compress" data-action="audio-compress">
+            <div class="action-card cat-audio" id="card-audio-compress" data-action="audio-compress">
                 <div class="card-header" data-card="audio-compress">
-                    <div class="card-icon icon-compress">15</div>
+                    <div class="card-icon icon-compress">16</div>
                     <div class="card-info">
                         <div class="card-title">Audio Compress</div>
                         <div class="card-desc">Smaller file</div>
@@ -818,9 +863,9 @@
             </div>
 
             <!-- Trim Audio Card -->
-            <div class="action-card" id="card-trim-audio" data-action="trim-audio">
+            <div class="action-card cat-audio" id="card-trim-audio" data-action="trim-audio">
                 <div class="card-header" data-card="trim-audio">
-                    <div class="card-icon icon-split">16</div>
+                    <div class="card-icon icon-split">17</div>
                     <div class="card-info">
                         <div class="card-title">Trim Audio</div>
                         <div class="card-desc">Cut start/end</div>
@@ -872,9 +917,9 @@
             </div>
 
             <!-- Normalize Audio Card -->
-            <div class="action-card" id="card-normalize-audio" data-action="normalize-audio">
+            <div class="action-card cat-audio" id="card-normalize-audio" data-action="normalize-audio">
                 <div class="card-header" data-card="normalize-audio">
-                    <div class="card-icon icon-merge">17</div>
+                    <div class="card-icon icon-merge">18</div>
                     <div class="card-info">
                         <div class="card-title">Normalize Audio</div>
                         <div class="card-desc">Fix volume</div>
@@ -925,50 +970,6 @@
                 </div>
             </div>
 
-            <!-- Remove Metadata Card -->
-            <div class="action-card" id="card-remove-metadata" data-action="remove-metadata">
-                <div class="card-header" data-card="remove-metadata">
-                    <div class="card-icon icon-metadata">18</div>
-                    <div class="card-info">
-                        <div class="card-title">Remove Metadata</div>
-                        <div class="card-desc">Strip all metadata from files</div>
-                    </div>
-                    <button class="card-close hidden" data-close="remove-metadata">x</button>
-                </div>
-                <div class="card-body hidden" id="body-remove-metadata">
-                    <div class="card-dropzone" id="dropzone-remove-metadata">
-                        <input type="file" id="file-remove-metadata" class="file-input" accept="*/*">
-                        <div class="dropzone-display">
-                            <div class="dropzone-icon">[^]</div>
-                            <div class="dropzone-text">Drop any file here or browse</div>
-                            <div class="dropzone-formats">Images, Videos, PDFs, Audio - All file types</div>
-                        </div>
-                    </div>
-                    <div class="card-options hidden" id="options-remove-metadata">
-                        <div class="file-selected">
-                            <span class="file-name" id="filename-remove-metadata"></span>
-                            <span class="file-size" id="filesize-remove-metadata"></span>
-                            <button class="btn-remove" id="remove-remove-metadata">x</button>
-                        </div>
-                        <button class="btn primary stretch" id="convert-remove-metadata">Remove Metadata</button>
-                    </div>
-                    <div class="card-progress hidden" id="progress-remove-metadata">
-                        <div class="progress-status" id="progress-status-remove-metadata">Removing metadata...</div>
-                        <div class="progress-bar-wrap">
-                            <div class="progress-bar" id="progress-bar-remove-metadata"></div>
-                        </div>
-                        <div class="progress-percent" id="progress-percent-remove-metadata">0%</div>
-                    </div>
-                    <div class="card-result hidden" id="result-remove-metadata">
-                        <div class="result-title">Done</div>
-                        <div class="result-file" id="result-file-remove-metadata"></div>
-                        <div class="result-actions">
-                            <button class="btn primary" id="download-remove-metadata">Download</button>
-                            <button class="btn ghost" id="another-remove-metadata">Remove from another</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
         </section>
 
         <!-- Error Panel -->

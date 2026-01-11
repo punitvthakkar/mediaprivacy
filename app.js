@@ -135,7 +135,7 @@ class MediaPrivacyApp {
                 // Handle immediate execution for single digits (except 1, which could be multi-digit)
                 if (this.keySequence.length === 1) {
                     if (e.key === '0') {
-                        // 0 is shortcut for card 18 (remove-metadata)
+                        // 0 is shortcut for card 18 (normalize-audio)
                         this.executeKeyboardShortcut(18);
                         this.keySequence = '';
                     } else if (e.key >= '2' && e.key <= '9') {
@@ -189,16 +189,16 @@ class MediaPrivacyApp {
             6: 'resize-image',
             7: 'convert-image',
             8: 'compress-image',
-            9: 'video-audio',
-            10: 'video-mp4',
-            11: 'video-compress',
-            12: 'trim-video',
-            13: 'video-gif',
-            14: 'audio-mp3',
-            15: 'audio-compress',
-            16: 'trim-audio',
-            17: 'normalize-audio',
-            18: 'remove-metadata'
+            9: 'remove-metadata',
+            10: 'video-audio',
+            11: 'video-mp4',
+            12: 'video-compress',
+            13: 'trim-video',
+            14: 'video-gif',
+            15: 'audio-mp3',
+            16: 'audio-compress',
+            17: 'trim-audio',
+            18: 'normalize-audio'
         };
 
         const cardId = cardMap[cardNumber];
