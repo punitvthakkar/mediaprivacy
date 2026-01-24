@@ -1,10 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MediaPrivacy - Video & PDF Tools</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%23000' width='100' height='100'/><text y='.85em' x='10' font-size='70' fill='%23fff'>MP</text></svg>">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%23000' width='100' height='100'/><text y='.85em' x='10' font-size='70' fill='%23fff'>MP</text></svg>">
     <link rel="stylesheet" href="styles.css">
     <!-- FFmpeg.wasm for video conversion -->
     <script src="https://cdn.jsdelivr.net/npm/@flemist/ffmpeg.wasm-st@0.10.1/dist/ffmpeg.min.js"></script>
@@ -14,10 +16,10 @@
     <script src="https://unpkg.com/downloadjs@1.4.7"></script>
     <script src="https://unpkg.com/browser-image-compression@2.0.0/dist/browser-image-compression.js"></script>
     <script src="https://unpkg.com/pdfkit@0.11.0/js/pdfkit.standalone.js"></script>
-    <script src="https://unpkg.com/blob-stream@0.1.3/blob-stream.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.0/FileSaver.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.js"></script>
 </head>
+
 <body>
     <div class="app-shell">
         <!-- Header -->
@@ -80,12 +82,15 @@
                         <div class="options-row">
                             <label>Pages</label>
                             <div class="radio-group">
-                                <label><input type="radio" name="pages-pdf-images" value="all" checked> All pages</label>
-                                <label><input type="radio" name="pages-pdf-images" value="specific"> Select pages</label>
+                                <label><input type="radio" name="pages-pdf-images" value="all" checked> All
+                                    pages</label>
+                                <label><input type="radio" name="pages-pdf-images" value="specific"> Select
+                                    pages</label>
                             </div>
                         </div>
                         <div class="options-row hidden" id="page-input-row-pdf-images">
-                            <input type="text" id="page-input-pdf-images" class="form-control" placeholder="e.g., 1,3-5,7">
+                            <input type="text" id="page-input-pdf-images" class="form-control"
+                                placeholder="e.g., 1,3-5,7">
                         </div>
                         <button class="btn primary stretch" id="convert-pdf-images">Convert to PNG</button>
                     </div>
@@ -134,7 +139,8 @@
                         </div>
                         <div class="options-row">
                             <label for="split-page-input">Split after page</label>
-                            <input type="number" id="split-page-input" class="form-control" min="1" placeholder="Page number">
+                            <input type="number" id="split-page-input" class="form-control" min="1"
+                                placeholder="Page number">
                         </div>
                         <button class="btn primary stretch" id="convert-split-pdf">Split PDF</button>
                     </div>
@@ -163,7 +169,8 @@
                 </div>
                 <div class="card-body hidden" id="body-merge-pdf">
                     <div class="card-dropzone" id="dropzone-merge-pdf">
-                        <input type="file" id="file-merge-pdf" class="file-input" accept=".pdf,application/pdf" multiple>
+                        <input type="file" id="file-merge-pdf" class="file-input" accept=".pdf,application/pdf"
+                            multiple>
                         <div class="dropzone-display">
                             <div class="dropzone-icon">[^]</div>
                             <div class="dropzone-text">Drop PDFs here or browse</div>
@@ -402,8 +409,10 @@
                         </div>
                         <div class="options-row">
                             <label for="quality-compress-image">Quality</label>
-                            <input type="range" id="quality-compress-image" class="form-control" min="10" max="100" value="80" step="5">
-                            <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 4px;">
+                            <input type="range" id="quality-compress-image" class="form-control" min="10" max="100"
+                                value="80" step="5">
+                            <div
+                                style="display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 4px;">
                                 <span>Smaller file</span>
                                 <span id="quality-value-compress-image">80%</span>
                                 <span>Better quality</span>
@@ -479,7 +488,8 @@
                 <div class="card-body hidden" id="body-video-audio">
                     <!-- File drop zone -->
                     <div class="card-dropzone" id="dropzone-video-audio">
-                        <input type="file" id="file-video-audio" class="file-input" accept="video/*,.mp4,.mov,.avi,.mkv,.webm,.m4v,.wmv,.flv">
+                        <input type="file" id="file-video-audio" class="file-input"
+                            accept="video/*,.mp4,.mov,.avi,.mkv,.webm,.m4v,.wmv,.flv">
                         <div class="dropzone-display">
                             <div class="dropzone-icon">[^]</div>
                             <div class="dropzone-text">Drop video here or browse</div>
@@ -660,7 +670,8 @@
                         </div>
                         <div class="options-row">
                             <label for="start-trim-video">Start time (seconds)</label>
-                            <input type="number" id="start-trim-video" class="form-control" min="0" value="0" step="0.1">
+                            <input type="number" id="start-trim-video" class="form-control" min="0" value="0"
+                                step="0.1">
                         </div>
                         <div class="options-row">
                             <label for="end-trim-video">End time (seconds, 0 = end)</label>
@@ -718,7 +729,8 @@
                         </div>
                         <div class="options-row">
                             <label for="duration-video-gif">Duration (seconds, max 10)</label>
-                            <input type="number" id="duration-video-gif" class="form-control" min="0.5" max="10" value="3" step="0.5">
+                            <input type="number" id="duration-video-gif" class="form-control" min="0.5" max="10"
+                                value="3" step="0.5">
                         </div>
                         <div class="options-row">
                             <label for="fps-video-gif">Frame rate</label>
@@ -730,7 +742,8 @@
                         </div>
                         <div class="options-row">
                             <label for="width-video-gif">Width (px)</label>
-                            <input type="number" id="width-video-gif" class="form-control" min="100" max="800" value="480">
+                            <input type="number" id="width-video-gif" class="form-control" min="100" max="800"
+                                value="480">
                         </div>
                         <button class="btn primary stretch" id="convert-video-gif">Create GIF</button>
                     </div>
@@ -889,7 +902,8 @@
                         </div>
                         <div class="options-row">
                             <label for="start-trim-audio">Start time (seconds)</label>
-                            <input type="number" id="start-trim-audio" class="form-control" min="0" value="0" step="0.1">
+                            <input type="number" id="start-trim-audio" class="form-control" min="0" value="0"
+                                step="0.1">
                         </div>
                         <div class="options-row">
                             <label for="end-trim-audio">End time (seconds, 0 = end)</label>
@@ -970,6 +984,50 @@
                 </div>
             </div>
 
+            <!-- SRT to PDF Card -->
+            <div class="action-card cat-pdf" id="card-srt-pdf" data-action="srt-pdf">
+                <div class="card-header" data-card="srt-pdf">
+                    <div class="card-icon icon-pdf">19</div>
+                    <div class="card-info">
+                        <div class="card-title">SRT to PDF</div>
+                        <div class="card-desc">Formatted transcript</div>
+                    </div>
+                    <button class="card-close hidden" data-close="srt-pdf">x</button>
+                </div>
+                <div class="card-body hidden" id="body-srt-pdf">
+                    <div class="card-dropzone" id="dropzone-srt-pdf">
+                        <input type="file" id="file-srt-pdf" class="file-input" accept=".srt">
+                        <div class="dropzone-display">
+                            <div class="dropzone-icon">[^]</div>
+                            <div class="dropzone-text">Drop SRT file here or browse</div>
+                            <div class="dropzone-formats">SRT subtitle files only</div>
+                        </div>
+                    </div>
+                    <div class="card-options hidden" id="options-srt-pdf">
+                        <div class="file-selected">
+                            <span class="file-name" id="filename-srt-pdf"></span>
+                            <span class="file-size" id="filesize-srt-pdf"></span>
+                            <button class="btn-remove" id="remove-srt-pdf">x</button>
+                        </div>
+                        <button class="btn primary stretch" id="convert-srt-pdf">Convert to PDF</button>
+                    </div>
+                    <div class="card-progress hidden" id="progress-srt-pdf">
+                        <div class="progress-status" id="progress-status-srt-pdf">Converting...</div>
+                        <div class="progress-bar-wrap">
+                            <div class="progress-bar" id="progress-bar-srt-pdf"></div>
+                        </div>
+                        <div class="progress-percent" id="progress-percent-srt-pdf">0%</div>
+                    </div>
+                    <div class="card-result hidden" id="result-srt-pdf">
+                        <div class="result-title">Done</div>
+                        <div class="result-file" id="result-file-srt-pdf">PDF downloaded</div>
+                        <div class="result-actions">
+                            <button class="btn ghost" id="another-srt-pdf">Convert another</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </section>
 
         <!-- Error Panel -->
@@ -994,4 +1052,5 @@
     <script src="converter.js"></script>
     <script src="app.js"></script>
 </body>
+
 </html>

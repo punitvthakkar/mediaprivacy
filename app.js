@@ -30,7 +30,8 @@ class MediaPrivacyApp {
             'audio-compress': { file: null, result: null },
             'trim-audio': { file: null, result: null },
             'normalize-audio': { file: null, result: null },
-            'remove-metadata': { file: null, result: null, blobURL: null }
+            'remove-metadata': { file: null, result: null, blobURL: null },
+            'srt-pdf': { file: null, result: null }
         };
 
         this.init();
@@ -48,11 +49,11 @@ class MediaPrivacyApp {
 
     async checkFFmpegLibrary() {
         await new Promise(resolve => setTimeout(resolve, 500));
-        const ffmpegLib = window.createFFmpeg || 
-                          window.FFmpeg?.createFFmpeg || 
-                          (typeof FFmpegWASM !== 'undefined' ? FFmpegWASM.createFFmpeg : null) ||
-                          (typeof FFmpeg !== 'undefined' ? FFmpeg.createFFmpeg : null);
-        
+        const ffmpegLib = window.createFFmpeg ||
+            window.FFmpeg?.createFFmpeg ||
+            (typeof FFmpegWASM !== 'undefined' ? FFmpegWASM.createFFmpeg : null) ||
+            (typeof FFmpeg !== 'undefined' ? FFmpeg.createFFmpeg : null);
+
         if (typeof ffmpegLib === 'function') {
             window.createFFmpeg = ffmpegLib;
             this.ffmpegReady = true;
@@ -105,6 +106,7 @@ class MediaPrivacyApp {
         this.setupTrimAudioCard();
         this.setupNormalizeAudioCard();
         this.setupRemoveMetadataCard();
+        this.setupSrtPdfCard();
 
         // Error dismiss
         document.getElementById('errorDismiss').addEventListener('click', () => {
@@ -121,7 +123,7 @@ class MediaPrivacyApp {
             // Check if it's a number key (0-9)
             if (/^[0-9]$/.test(e.key)) {
                 e.preventDefault();
-                
+
                 // Clear existing timeout
                 if (this.keySequenceTimeout) {
                     clearTimeout(this.keySequenceTimeout);
@@ -153,7 +155,7 @@ class MediaPrivacyApp {
                     }
                 } else if (this.keySequence.length === 2) {
                     // Two-digit number entered
-                    if (cardNumber >= 10 && cardNumber <= 18) {
+                    if (cardNumber >= 10 && cardNumber <= 19) {
                         // Valid two-digit card, execute immediately
                         this.executeKeyboardShortcut(cardNumber);
                         this.keySequence = '';
@@ -169,7 +171,7 @@ class MediaPrivacyApp {
                     // More than 2 digits (invalid), execute previous valid sequence
                     const prevSequence = this.keySequence.slice(0, -1);
                     const prevCardNumber = parseInt(prevSequence, 10);
-                    if (prevCardNumber >= 1 && prevCardNumber <= 18) {
+                    if (prevCardNumber >= 1 && prevCardNumber <= 19) {
                         this.executeKeyboardShortcut(prevCardNumber);
                     }
                     this.keySequence = '';
@@ -198,7 +200,8 @@ class MediaPrivacyApp {
             15: 'audio-mp3',
             16: 'audio-compress',
             17: 'trim-audio',
-            18: 'normalize-audio'
+            18: 'normalize-audio',
+            19: 'srt-pdf'
         };
 
         const cardId = cardMap[cardNumber];
@@ -209,7 +212,7 @@ class MediaPrivacyApp {
 
     setupGlobalDropZone() {
         let dragCounter = 0;
-        
+
         document.body.addEventListener('dragover', (e) => {
             e.preventDefault();
         });
@@ -227,12 +230,12 @@ class MediaPrivacyApp {
         document.body.addEventListener('drop', (e) => {
             e.preventDefault();
             dragCounter = 0;
-            
+
             // Don't handle if dropped on a card's own dropzone (let card handle it)
             if (e.target.closest('.card-dropzone')) {
                 return;
             }
-            
+
             const files = Array.from(e.dataTransfer.files);
             if (files.length > 0) {
                 this.handleGlobalDrop(files);
@@ -292,7 +295,7 @@ class MediaPrivacyApp {
     highlightCards(cardIds) {
         // Remove previous highlights
         document.querySelectorAll('.action-card.highlight').forEach(c => c.classList.remove('highlight'));
-        
+
         cardIds.forEach(id => {
             const card = document.getElementById(`card-${id}`);
             if (card) {
@@ -478,7 +481,7 @@ class MediaPrivacyApp {
             // Show result
             document.getElementById(`progress-${cardId}`).classList.add('hidden');
             document.getElementById(`result-${cardId}`).classList.remove('hidden');
-            document.getElementById(`result-file-${cardId}`).textContent = 
+            document.getElementById(`result-file-${cardId}`).textContent =
                 `${result.filename} (${this.formatFileSize(result.size)})`;
 
         } catch (error) {
@@ -502,7 +505,7 @@ class MediaPrivacyApp {
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        
+
         // Clean up URL after a delay
         setTimeout(() => URL.revokeObjectURL(cleanUrl), 100);
     }
@@ -613,7 +616,7 @@ class MediaPrivacyApp {
                 document.getElementById(`progress-bar-${cardId}`).style.width = percent + '%';
                 document.getElementById(`progress-percent-${cardId}`).textContent = Math.round(percent) + '%';
             }
-            
+
             // Wait for all downloads to complete
             await Promise.all(downloadPromises);
 
@@ -693,7 +696,7 @@ class MediaPrivacyApp {
 
         try {
             const baseName = this.state[cardId].file.name.replace('.pdf', '');
-            
+
             const pdf1 = await PDFLib.PDFDocument.create();
             const pdf2 = await PDFLib.PDFDocument.create();
 
@@ -711,7 +714,7 @@ class MediaPrivacyApp {
             const blob2 = new Blob([bytes2], { type: 'application/pdf' });
             const cleanBlob1 = await this.stripMetadataFromBlob(blob1, `${baseName} part 1.pdf`, 'application/pdf');
             const cleanBlob2 = await this.stripMetadataFromBlob(blob2, `${baseName} part 2.pdf`, 'application/pdf');
-            
+
             download(cleanBlob1, `${baseName} part 1.pdf`, 'application/pdf');
             download(cleanBlob2, `${baseName} part 2.pdf`, 'application/pdf');
 
@@ -900,7 +903,7 @@ class MediaPrivacyApp {
             const cleanBlob = await this.stripMetadataFromBlob(compressedBlob, compressedName, 'application/pdf');
             download(cleanBlob, compressedName, 'application/pdf');
 
-            document.getElementById(`result-file-${cardId}`).textContent = 
+            document.getElementById(`result-file-${cardId}`).textContent =
                 `${compressedName} (${this.formatFileSize(compressedBytes.length)})`;
             document.getElementById(`progress-${cardId}`).classList.add('hidden');
             document.getElementById(`result-${cardId}`).classList.remove('hidden');
@@ -1235,7 +1238,7 @@ class MediaPrivacyApp {
 
     handleCompressImage(file) {
         const cardId = 'compress-image';
-        
+
         if (!file.type.startsWith('image/')) {
             this.showError('Please select an image file');
             return;
@@ -1273,7 +1276,7 @@ class MediaPrivacyApp {
 
             // Determine output format - use JPEG for compression unless it's PNG with transparency
             let outputFormat = 'image/jpeg';
-            
+
             // Check if PNG has transparency
             if (file.type === 'image/png') {
                 const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -1287,7 +1290,7 @@ class MediaPrivacyApp {
                 const baseName = file.name.replace(/\.[^.]+$/, '');
                 const ext = outputFormat === 'image/png' ? 'png' : 'jpg';
                 const filename = `${baseName}_compressed.${ext}`;
-                
+
                 // Strip metadata from compressed image before download
                 const cleanBlob = await this.stripMetadataFromBlob(blob, filename, outputFormat);
                 download(cleanBlob, filename, outputFormat);
@@ -1296,7 +1299,7 @@ class MediaPrivacyApp {
                 const newSize = cleanBlob.size;
                 const reduction = Math.round((1 - newSize / originalSize) * 100);
 
-                document.getElementById(`result-file-${cardId}`).textContent = 
+                document.getElementById(`result-file-${cardId}`).textContent =
                     `${filename} (${this.formatFileSize(newSize)}) - ${reduction}% smaller`;
                 document.getElementById(`result-${cardId}`).classList.remove('hidden');
             }, outputFormat, quality);
@@ -1385,7 +1388,7 @@ class MediaPrivacyApp {
 
             document.getElementById(`progress-${cardId}`).classList.add('hidden');
             document.getElementById(`result-${cardId}`).classList.remove('hidden');
-            document.getElementById(`result-file-${cardId}`).textContent = 
+            document.getElementById(`result-file-${cardId}`).textContent =
                 `${result.filename} (${this.formatFileSize(result.size)})`;
 
         } catch (error) {
@@ -1479,7 +1482,7 @@ class MediaPrivacyApp {
 
             document.getElementById(`progress-${cardId}`).classList.add('hidden');
             document.getElementById(`result-${cardId}`).classList.remove('hidden');
-            document.getElementById(`result-file-${cardId}`).textContent = 
+            document.getElementById(`result-file-${cardId}`).textContent =
                 `${result.filename} (${this.formatFileSize(result.size)}) - ${reduction}% smaller`;
 
         } catch (error) {
@@ -1572,7 +1575,7 @@ class MediaPrivacyApp {
 
             document.getElementById(`progress-${cardId}`).classList.add('hidden');
             document.getElementById(`result-${cardId}`).classList.remove('hidden');
-            document.getElementById(`result-file-${cardId}`).textContent = 
+            document.getElementById(`result-file-${cardId}`).textContent =
                 `${result.filename} (${this.formatFileSize(result.size)})`;
 
         } catch (error) {
@@ -1673,7 +1676,7 @@ class MediaPrivacyApp {
 
             document.getElementById(`progress-${cardId}`).classList.add('hidden');
             document.getElementById(`result-${cardId}`).classList.remove('hidden');
-            document.getElementById(`result-file-${cardId}`).textContent = 
+            document.getElementById(`result-file-${cardId}`).textContent =
                 `${result.filename} (${this.formatFileSize(result.size)})`;
 
         } catch (error) {
@@ -1756,7 +1759,7 @@ class MediaPrivacyApp {
 
             document.getElementById(`progress-${cardId}`).classList.add('hidden');
             document.getElementById(`result-${cardId}`).classList.remove('hidden');
-            document.getElementById(`result-file-${cardId}`).textContent = 
+            document.getElementById(`result-file-${cardId}`).textContent =
                 `${result.filename} (${this.formatFileSize(result.size)})`;
 
         } catch (error) {
@@ -1841,7 +1844,7 @@ class MediaPrivacyApp {
 
             document.getElementById(`progress-${cardId}`).classList.add('hidden');
             document.getElementById(`result-${cardId}`).classList.remove('hidden');
-            document.getElementById(`result-file-${cardId}`).textContent = 
+            document.getElementById(`result-file-${cardId}`).textContent =
                 `${result.filename} (${this.formatFileSize(result.size)}) - ${reduction}% smaller`;
 
         } catch (error) {
@@ -1927,7 +1930,7 @@ class MediaPrivacyApp {
 
             document.getElementById(`progress-${cardId}`).classList.add('hidden');
             document.getElementById(`result-${cardId}`).classList.remove('hidden');
-            document.getElementById(`result-file-${cardId}`).textContent = 
+            document.getElementById(`result-file-${cardId}`).textContent =
                 `${result.filename} (${this.formatFileSize(result.size)})`;
 
         } catch (error) {
@@ -2011,13 +2014,207 @@ class MediaPrivacyApp {
 
             document.getElementById(`progress-${cardId}`).classList.add('hidden');
             document.getElementById(`result-${cardId}`).classList.remove('hidden');
-            document.getElementById(`result-file-${cardId}`).textContent = 
+            document.getElementById(`result-file-${cardId}`).textContent =
                 `${result.filename} (${this.formatFileSize(result.size)})`;
 
         } catch (error) {
             document.getElementById(`progress-${cardId}`).classList.add('hidden');
             document.getElementById(`options-${cardId}`).classList.remove('hidden');
             this.showError(error.message);
+        }
+    }
+
+    // ==================== SRT TO PDF ====================
+    setupSrtPdfCard() {
+        const cardId = 'srt-pdf';
+        const fileInput = document.getElementById(`file-${cardId}`);
+        const dropzone = document.getElementById(`dropzone-${cardId}`);
+
+        this.setupDropzone(dropzone, fileInput);
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) this.handleSrtFile(file);
+        });
+
+        document.getElementById(`remove-${cardId}`).addEventListener('click', () => {
+            this.resetCard(cardId);
+            this.expandCard(cardId);
+        });
+
+        document.getElementById(`convert-${cardId}`).addEventListener('click', () => {
+            this.convertSrtToPdf();
+        });
+
+        document.getElementById(`another-${cardId}`).addEventListener('click', () => {
+            this.resetCard(cardId);
+            this.expandCard(cardId);
+        });
+    }
+
+    handleSrtFile(file) {
+        const cardId = 'srt-pdf';
+        this.state[cardId].file = file;
+
+        document.getElementById(`dropzone-${cardId}`).classList.add('hidden');
+        document.getElementById(`options-${cardId}`).classList.remove('hidden');
+        document.getElementById(`filename-${cardId}`).textContent = file.name;
+        document.getElementById(`filesize-${cardId}`).textContent = `(${this.formatFileSize(file.size)})`;
+    }
+
+    parseSrtFile(content) {
+        const entries = [];
+        // Split by double newlines (SRT entries are separated by blank lines)
+        const blocks = content.trim().split(/\n\s*\n/);
+
+        for (const block of blocks) {
+            const lines = block.trim().split('\n');
+            if (lines.length < 3) continue;
+
+            // Line 1: sequence number (skip)
+            // Line 2: timestamp line (e.g., "00:00:05,000 --> 00:00:08,000")
+            // Lines 3+: subtitle text
+
+            const timestampLine = lines[1];
+            const timestampMatch = timestampLine.match(/(\d{2}):(\d{2}):(\d{2}),\d{3}/);
+
+            if (!timestampMatch) continue;
+
+            // Convert to MM:SS format (or HH:MM:SS if hours > 0)
+            const hours = parseInt(timestampMatch[1], 10);
+            const minutes = parseInt(timestampMatch[2], 10);
+            const seconds = parseInt(timestampMatch[3], 10);
+
+            let timestamp;
+            if (hours > 0) {
+                timestamp = `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            } else {
+                timestamp = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            }
+
+            // Get subtitle text (lines 3 onwards)
+            // Strip HTML tags (like <b>, </b>, <i>, </i>, <u>, </u>, <font>, etc.)
+            const text = lines.slice(2).join(' ').trim().replace(/<[^>]*>/g, '');
+
+            // Check if text starts with a speaker name (format: "Name:")
+            let speaker = null;
+            let subtitleText = text;
+
+            const speakerMatch = text.match(/^([^:]+):\s*(.*)$/);
+            if (speakerMatch) {
+                speaker = speakerMatch[1].trim();
+                subtitleText = speakerMatch[2].trim();
+            }
+
+            entries.push({
+                timestamp,
+                speaker,
+                text: subtitleText
+            });
+        }
+
+        return entries;
+    }
+
+    async convertSrtToPdf() {
+        const cardId = 'srt-pdf';
+        const file = this.state[cardId].file;
+        if (!file) return;
+
+        document.getElementById(`options-${cardId}`).classList.add('hidden');
+        document.getElementById(`progress-${cardId}`).classList.remove('hidden');
+
+        const updateProgress = (percent) => {
+            document.getElementById(`progress-bar-${cardId}`).style.width = percent + '%';
+            document.getElementById(`progress-percent-${cardId}`).textContent = Math.round(percent) + '%';
+        };
+
+        try {
+            updateProgress(10);
+
+            // Read file content
+            const content = await file.text();
+            updateProgress(30);
+
+            // Parse SRT
+            const entries = this.parseSrtFile(content);
+            updateProgress(50);
+
+            if (entries.length === 0) {
+                throw new Error('No valid subtitle entries found in the SRT file');
+            }
+
+            // Create PDF using PDFKit
+            const doc = new PDFDocument({
+                margin: 50,
+                size: 'A4'
+            });
+
+            // Collect PDF data chunks into an array
+            const chunks = [];
+            doc.on('data', chunk => chunks.push(chunk));
+
+            // Set up fonts (using built-in Helvetica)
+            const fontRegular = 'Helvetica';
+            const fontBold = 'Helvetica-Bold';
+
+            // Track current speaker to group entries
+            let currentSpeaker = null;
+
+            for (let i = 0; i < entries.length; i++) {
+                const entry = entries[i];
+
+                // Check if we need a new page (leave some margin at bottom)
+                if (doc.y > 700) {
+                    doc.addPage();
+                }
+
+                // If speaker changed or is different, print speaker name
+                if (entry.speaker && entry.speaker !== currentSpeaker) {
+                    currentSpeaker = entry.speaker;
+                    doc.font(fontBold).fontSize(12).text(`${entry.speaker}:`, { continued: false });
+                } else if (!entry.speaker && currentSpeaker) {
+                    // No speaker in this entry but we had one before - reset
+                    currentSpeaker = null;
+                }
+
+                // Print timestamp
+                doc.font(fontRegular).fontSize(11).text(entry.timestamp, { continued: false });
+
+                // Print text
+                doc.font(fontRegular).fontSize(11).text(entry.text, { continued: false });
+
+                // Add spacing between entries
+                doc.moveDown(0.8);
+
+                updateProgress(50 + (i / entries.length) * 40);
+            }
+
+            // Wait for PDF generation to complete
+            const blob = await new Promise((resolve, reject) => {
+                doc.on('end', () => {
+                    const pdfBlob = new Blob(chunks, { type: 'application/pdf' });
+                    resolve(pdfBlob);
+                });
+                doc.on('error', reject);
+                doc.end();
+            });
+
+            updateProgress(100);
+
+            // Download the PDF
+            const baseName = file.name.replace(/\.srt$/i, '');
+            download(blob, `${baseName}.pdf`, 'application/pdf');
+
+            // Show result
+            document.getElementById(`progress-${cardId}`).classList.add('hidden');
+            document.getElementById(`result-${cardId}`).classList.remove('hidden');
+            document.getElementById(`result-file-${cardId}`).textContent = `${baseName}.pdf downloaded`;
+
+        } catch (error) {
+            document.getElementById(`progress-${cardId}`).classList.add('hidden');
+            document.getElementById(`options-${cardId}`).classList.remove('hidden');
+            this.showError('Conversion failed: ' + error.message);
         }
     }
 
@@ -2085,7 +2282,7 @@ class MediaPrivacyApp {
             try {
                 ffmpeg.FS('unlink', inputFileName);
                 ffmpeg.FS('unlink', outputFileName);
-            } catch (e) {}
+            } catch (e) { }
 
             const baseName = file.name.replace(/\.[^.]+$/, '');
             const filename = `${baseName}${outputExt}`;
@@ -2105,7 +2302,7 @@ class MediaPrivacyApp {
             try {
                 ffmpeg.FS('unlink', inputFileName);
                 ffmpeg.FS('unlink', outputFileName);
-            } catch (e) {}
+            } catch (e) { }
             throw new Error(`Processing failed: ${error.message || 'Unknown error'}`);
         }
     }
@@ -2162,7 +2359,7 @@ class MediaPrivacyApp {
             try {
                 ffmpeg.FS('unlink', inputFileName);
                 ffmpeg.FS('unlink', outputFileName);
-            } catch (e) {}
+            } catch (e) { }
 
             const baseName = file.name.replace(/\.[^.]+$/, '');
             const filename = `${baseName}.mp3`;
@@ -2181,7 +2378,7 @@ class MediaPrivacyApp {
             try {
                 ffmpeg.FS('unlink', inputFileName);
                 ffmpeg.FS('unlink', outputFileName);
-            } catch (e) {}
+            } catch (e) { }
             throw new Error(`Processing failed: ${error.message || 'Unknown error'}`);
         }
     }
@@ -2256,7 +2453,7 @@ class MediaPrivacyApp {
 
         try {
             updateProgress('Analyzing file type...', 10);
-            
+
             const fileType = file.type;
             const fileName = file.name.toLowerCase();
             let result;
@@ -2268,8 +2465,8 @@ class MediaPrivacyApp {
             } else if (fileType === 'application/pdf' || fileName.endsWith('.pdf')) {
                 updateProgress('Removing PDF metadata...', 30);
                 result = await this.removePdfMetadata(file);
-            } else if (fileType.startsWith('video/') || fileType.startsWith('audio/') || 
-                       /\.(mp4|mov|avi|mkv|webm|m4v|wmv|flv|mp3|wav|m4a|ogg|aac|flac)$/i.test(fileName)) {
+            } else if (fileType.startsWith('video/') || fileType.startsWith('audio/') ||
+                /\.(mp4|mov|avi|mkv|webm|m4v|wmv|flv|mp3|wav|m4a|ogg|aac|flac)$/i.test(fileName)) {
                 updateProgress('Removing media metadata...', 30);
                 result = await this.removeMediaMetadata(file, updateProgress);
             } else {
@@ -2279,12 +2476,12 @@ class MediaPrivacyApp {
             }
 
             updateProgress('Finalizing...', 95);
-            
+
             this.state[cardId].result = result;
 
             document.getElementById(`progress-${cardId}`).classList.add('hidden');
             document.getElementById(`result-${cardId}`).classList.remove('hidden');
-            document.getElementById(`result-file-${cardId}`).textContent = 
+            document.getElementById(`result-file-${cardId}`).textContent =
                 `${result.filename} (${this.formatFileSize(result.size)})`;
 
             updateProgress('Complete!', 100);
@@ -2304,22 +2501,22 @@ class MediaPrivacyApp {
                     canvas.width = img.width;
                     canvas.height = img.height;
                     const ctx = canvas.getContext('2d');
-                    
+
                     // Draw image to canvas - this strips all EXIF and metadata
                     ctx.drawImage(img, 0, 0);
-                    
+
                     // Determine output format (prefer PNG for lossless, or keep original format)
-                    const outputFormat = file.type === 'image/png' ? 'image/png' : 
-                                        file.type === 'image/webp' ? 'image/webp' :
-                                        'image/jpeg';
-                    
+                    const outputFormat = file.type === 'image/png' ? 'image/png' :
+                        file.type === 'image/webp' ? 'image/webp' :
+                            'image/jpeg';
+
                     canvas.toBlob((blob) => {
                         const baseName = file.name.replace(/\.[^.]+$/, '');
-                        const ext = outputFormat === 'image/png' ? 'png' : 
-                                   outputFormat === 'image/webp' ? 'webp' : 'jpg';
+                        const ext = outputFormat === 'image/png' ? 'png' :
+                            outputFormat === 'image/webp' ? 'webp' : 'jpg';
                         const filename = `${baseName}_no_metadata.${ext}`;
                         const blobURL = URL.createObjectURL(blob);
-                        
+
                         const result = {
                             blob: blob,
                             url: blobURL,
@@ -2342,21 +2539,21 @@ class MediaPrivacyApp {
         try {
             const arrayBuffer = await this.readFileAsArrayBuffer(file);
             const pdfDoc = await PDFLib.PDFDocument.load(arrayBuffer);
-            
+
             // Create a new PDF document without copying metadata
             const newPdf = await PDFLib.PDFDocument.create();
-            
+
             // Copy all pages
             const pages = await newPdf.copyPages(pdfDoc, pdfDoc.getPageIndices());
             pages.forEach(page => newPdf.addPage(page));
-            
+
             // Save without metadata
             const pdfBytes = await newPdf.save();
             const baseName = file.name.replace('.pdf', '');
             const filename = `${baseName}_no_metadata.pdf`;
             const blob = new Blob([pdfBytes], { type: 'application/pdf' });
             const blobURL = URL.createObjectURL(blob);
-            
+
             const result = {
                 blob: blob,
                 url: blobURL,
@@ -2389,7 +2586,7 @@ class MediaPrivacyApp {
 
         try {
             if (onProgress) onProgress('Reading file...', 50);
-            
+
             const fileData = await this.readFileAsUint8Array(file);
             ffmpeg.FS('writeFile', inputFileName, fileData);
 
@@ -2444,11 +2641,11 @@ class MediaPrivacyApp {
             // Cleanup on error
             try {
                 ffmpeg.FS('unlink', inputFileName);
-            } catch (e) {}
+            } catch (e) { }
             try {
                 ffmpeg.FS('unlink', outputFileName);
-            } catch (e) {}
-            
+            } catch (e) { }
+
             throw new Error('Media processing failed: ' + error.message);
         }
     }
@@ -2462,7 +2659,7 @@ class MediaPrivacyApp {
         const ext = file.name.match(/\.[^.]+$/) || '';
         const filename = `${baseName}_no_metadata${ext}`;
         const blobURL = URL.createObjectURL(blob);
-        
+
         const result = {
             blob: blob,
             url: blobURL,
@@ -2487,7 +2684,7 @@ class MediaPrivacyApp {
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        
+
         // Clean up URL after a delay
         setTimeout(() => URL.revokeObjectURL(cleanUrl), 100);
     }
@@ -2530,17 +2727,17 @@ class MediaPrivacyApp {
      */
     async stripMetadataFromBlob(blob, filename, mimeType) {
         const fileName = filename.toLowerCase();
-        
+
         // For images, use canvas to strip EXIF/metadata
         if (mimeType && mimeType.startsWith('image/')) {
             return await this.stripImageMetadata(blob, mimeType);
         }
-        
+
         // For PDFs, recreate without metadata
         if (mimeType === 'application/pdf' || fileName.endsWith('.pdf')) {
             return await this.stripPdfMetadata(blob);
         }
-        
+
         // For video/audio, use FFmpeg if available
         if (mimeType && (mimeType.startsWith('video/') || mimeType.startsWith('audio/')) ||
             /\.(mp4|mov|avi|mkv|webm|m4v|wmv|flv|mp3|wav|m4a|ogg|aac|flac)$/i.test(fileName)) {
@@ -2552,7 +2749,7 @@ class MediaPrivacyApp {
                 return blob;
             }
         }
-        
+
         // For other types, return as-is (can't strip metadata reliably)
         return blob;
     }
@@ -2567,11 +2764,11 @@ class MediaPrivacyApp {
                     canvas.height = img.height;
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0);
-                    
+
                     // Use original mime type, default to PNG for lossless
-                    const outputFormat = mimeType === 'image/png' ? 'image/png' : 
-                                       mimeType === 'image/webp' ? 'image/webp' : 'image/jpeg';
-                    
+                    const outputFormat = mimeType === 'image/png' ? 'image/png' :
+                        mimeType === 'image/webp' ? 'image/webp' : 'image/jpeg';
+
                     canvas.toBlob((newBlob) => {
                         resolve(newBlob || blob);
                     }, outputFormat, 0.95);
@@ -2589,10 +2786,10 @@ class MediaPrivacyApp {
             const arrayBuffer = await this.readFileAsArrayBuffer(blob);
             const pdfDoc = await PDFLib.PDFDocument.load(arrayBuffer);
             const newPdf = await PDFLib.PDFDocument.create();
-            
+
             const pages = await newPdf.copyPages(pdfDoc, pdfDoc.getPageIndices());
             pages.forEach(page => newPdf.addPage(page));
-            
+
             const pdfBytes = await newPdf.save();
             return new Blob([pdfBytes], { type: 'application/pdf' });
         } catch (error) {
@@ -2632,7 +2829,7 @@ class MediaPrivacyApp {
             try {
                 ffmpeg.FS('unlink', inputFileName);
                 ffmpeg.FS('unlink', outputFileName);
-            } catch (e) {}
+            } catch (e) { }
 
             return new Blob([data.buffer], { type: mimeType || blob.type });
         } catch (error) {
@@ -2640,7 +2837,7 @@ class MediaPrivacyApp {
             try {
                 ffmpeg.FS('unlink', inputFileName);
                 ffmpeg.FS('unlink', outputFileName);
-            } catch (e) {}
+            } catch (e) { }
             throw error;
         }
     }
