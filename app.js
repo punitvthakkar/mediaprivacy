@@ -11,6 +11,28 @@ class MediaPrivacyApp {
         this.keySequenceTimeout = null;
         this.KEY_SEQUENCE_DELAY = 500; // milliseconds to wait for next digit
 
+        // Category navigation state
+        this.navigationState = {
+            currentCategory: null,  // null = main view, 'pdf'/'image'/'video'/'audio' = category view
+            expandedCard: null
+        };
+
+        // Category to cards mapping
+        this.categoryCards = {
+            'pdf': ['pdf-images', 'split-pdf', 'merge-pdf', 'compress-pdf', 'images-pdf', 'srt-pdf'],
+            'image': ['resize-image', 'convert-image', 'compress-image', 'remove-metadata'],
+            'video': ['video-audio', 'video-mp4', 'video-compress', 'trim-video', 'video-gif'],
+            'audio': ['audio-mp3', 'audio-compress', 'trim-audio', 'normalize-audio']
+        };
+
+        // Category key mapping (1-4)
+        this.categoryKeyMap = {
+            '1': 'pdf',
+            '2': 'image',
+            '3': 'video',
+            '4': 'audio'
+        };
+
         // State for each action
         this.state = {
             'video-audio': { file: null, result: null },
@@ -66,6 +88,20 @@ class MediaPrivacyApp {
             document.getElementById('helpPanel').classList.toggle('hidden');
         });
 
+        // Category headers - expand/collapse on click
+        document.querySelectorAll('.category-header').forEach(header => {
+            header.addEventListener('click', (e) => {
+                const categorySection = header.closest('.category-section');
+                const category = categorySection.dataset.category;
+                
+                if (categorySection.classList.contains('expanded')) {
+                    this.collapseCategory();
+                } else {
+                    this.expandCategory(category);
+                }
+            });
+        });
+
         // Card headers - expand on click
         document.querySelectorAll('.card-header').forEach(header => {
             header.addEventListener('click', (e) => {
@@ -113,101 +149,103 @@ class MediaPrivacyApp {
             document.getElementById('errorPanel').classList.add('hidden');
         });
 
-        // Keyboard shortcuts (1-18 to open cards, supports multi-digit)
+        // Keyboard shortcuts - Two-level navigation
+        // Level 1 (main view): 1=PDF, 2=Image, 3=Video, 4=Audio
+        // Level 2 (category view): 1-x opens cards within category
+        // Escape/Backspace: Go back to main view
         document.addEventListener('keydown', (e) => {
             // Only handle if not typing in an input/textarea/select
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
                 return;
             }
 
-            // Check if it's a number key (0-9)
-            if (/^[0-9]$/.test(e.key)) {
+            // Handle Escape and Backspace to go back
+            if (e.key === 'Escape' || e.key === 'Backspace') {
                 e.preventDefault();
-
-                // Clear existing timeout
-                if (this.keySequenceTimeout) {
-                    clearTimeout(this.keySequenceTimeout);
-                    this.keySequenceTimeout = null;
+                
+                // If a card is expanded, collapse it first
+                if (this.navigationState.expandedCard) {
+                    this.collapseCard(this.navigationState.expandedCard);
+                    return;
                 }
+                
+                // If in a category, collapse it
+                if (this.navigationState.currentCategory) {
+                    this.collapseCategory();
+                }
+                return;
+            }
 
-                // Add digit to sequence
-                this.keySequence += e.key;
-                const cardNumber = parseInt(this.keySequence, 10);
+            // Check if it's a number key (1-9)
+            if (/^[1-9]$/.test(e.key)) {
+                e.preventDefault();
+                const keyNum = parseInt(e.key, 10);
 
-                // Handle immediate execution for single digits (except 1, which could be multi-digit)
-                if (this.keySequence.length === 1) {
-                    if (e.key === '0') {
-                        // 0 is shortcut for card 18 (normalize-audio)
-                        this.executeKeyboardShortcut(18);
-                        this.keySequence = '';
-                    } else if (e.key >= '2' && e.key <= '9') {
-                        // Digits 2-9 are single-digit cards, execute immediately
-                        this.executeKeyboardShortcut(cardNumber);
-                        this.keySequence = '';
-                    } else if (e.key === '1') {
-                        // 1 could be card 1 or start of 10-18, wait for next digit
-                        this.keySequenceTimeout = setTimeout(() => {
-                            // Timeout expired, execute as card 1
-                            this.executeKeyboardShortcut(1);
-                            this.keySequence = '';
-                            this.keySequenceTimeout = null;
-                        }, this.KEY_SEQUENCE_DELAY);
-                    }
-                } else if (this.keySequence.length === 2) {
-                    // Two-digit number entered
-                    if (cardNumber >= 10 && cardNumber <= 19) {
-                        // Valid two-digit card, execute immediately
-                        this.executeKeyboardShortcut(cardNumber);
-                        this.keySequence = '';
-                    } else {
-                        // Invalid two-digit number, execute first digit
-                        const firstDigit = parseInt(this.keySequence[0], 10);
-                        if (firstDigit >= 1 && firstDigit <= 9) {
-                            this.executeKeyboardShortcut(firstDigit);
-                        }
-                        this.keySequence = '';
+                if (this.navigationState.currentCategory === null) {
+                    // Main view: 1-4 expand categories
+                    if (keyNum >= 1 && keyNum <= 4) {
+                        const category = this.categoryKeyMap[e.key];
+                        this.expandCategory(category);
                     }
                 } else {
-                    // More than 2 digits (invalid), execute previous valid sequence
-                    const prevSequence = this.keySequence.slice(0, -1);
-                    const prevCardNumber = parseInt(prevSequence, 10);
-                    if (prevCardNumber >= 1 && prevCardNumber <= 19) {
-                        this.executeKeyboardShortcut(prevCardNumber);
+                    // Category view: 1-x expand cards within category
+                    const cards = this.categoryCards[this.navigationState.currentCategory];
+                    if (keyNum >= 1 && keyNum <= cards.length) {
+                        const cardId = cards[keyNum - 1];
+                        this.expandCard(cardId);
                     }
-                    this.keySequence = '';
                 }
             }
         });
     }
 
-    executeKeyboardShortcut(cardNumber) {
-        // Map card numbers (1-18) to action IDs
-        const cardMap = {
-            1: 'pdf-images',
-            2: 'split-pdf',
-            3: 'merge-pdf',
-            4: 'compress-pdf',
-            5: 'images-pdf',
-            6: 'resize-image',
-            7: 'convert-image',
-            8: 'compress-image',
-            9: 'remove-metadata',
-            10: 'video-audio',
-            11: 'video-mp4',
-            12: 'video-compress',
-            13: 'trim-video',
-            14: 'video-gif',
-            15: 'audio-mp3',
-            16: 'audio-compress',
-            17: 'trim-audio',
-            18: 'normalize-audio',
-            19: 'srt-pdf'
-        };
-
-        const cardId = cardMap[cardNumber];
-        if (cardId) {
-            this.expandCard(cardId);
+    // ==================== CATEGORY NAVIGATION ====================
+    expandCategory(category) {
+        const categorySection = document.getElementById(`category-${category}`);
+        const container = document.getElementById('categoryContainer');
+        
+        if (!categorySection) return;
+        
+        // Collapse any expanded card first
+        if (this.navigationState.expandedCard) {
+            this.collapseCard(this.navigationState.expandedCard);
         }
+        
+        // Collapse other expanded categories
+        document.querySelectorAll('.category-section.expanded').forEach(section => {
+            if (section.id !== `category-${category}`) {
+                section.classList.remove('expanded');
+            }
+        });
+        
+        // Expand the selected category
+        categorySection.classList.add('expanded');
+        container.classList.add('has-expanded');
+        
+        // Update navigation state
+        this.navigationState.currentCategory = category;
+        
+        // Scroll to top of category
+        categorySection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    collapseCategory() {
+        const container = document.getElementById('categoryContainer');
+        
+        // Collapse any expanded card first
+        if (this.navigationState.expandedCard) {
+            this.collapseCard(this.navigationState.expandedCard);
+        }
+        
+        // Collapse all category sections
+        document.querySelectorAll('.category-section.expanded').forEach(section => {
+            section.classList.remove('expanded');
+        });
+        
+        container.classList.remove('has-expanded');
+        
+        // Update navigation state
+        this.navigationState.currentCategory = null;
     }
 
     setupGlobalDropZone() {
@@ -251,44 +289,68 @@ class MediaPrivacyApp {
         // Detect file type and automatically start workflow
         if (type.startsWith('video/') || /\.(mp4|mov|avi|mkv|webm|m4v|wmv|flv)$/i.test(name)) {
             // Video file -> Video to Audio workflow
-            this.expandCard('video-audio');
-            setTimeout(() => this.handleFileForCard('video-audio', file), 100);
+            this.expandCategory('video');
+            setTimeout(() => {
+                this.expandCard('video-audio');
+                setTimeout(() => this.handleFileForCard('video-audio', file), 100);
+            }, 300);
         } else if (type === 'application/pdf' || name.endsWith('.pdf')) {
             // Multiple PDFs = merge workflow
+            this.expandCategory('pdf');
             if (files.length > 1) {
-                this.expandCard('merge-pdf');
                 setTimeout(() => {
-                    files.forEach(f => {
-                        if (f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf')) {
-                            this.addMergeFile(f);
-                        }
-                    });
-                }, 100);
+                    this.expandCard('merge-pdf');
+                    setTimeout(() => {
+                        files.forEach(f => {
+                            if (f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf')) {
+                                this.addMergeFile(f);
+                            }
+                        });
+                    }, 100);
+                }, 300);
             } else {
                 // Single PDF -> PDF to Images workflow (most common)
-                this.expandCard('pdf-images');
-                setTimeout(() => this.handleFileForCard('pdf-images', file), 100);
+                setTimeout(() => {
+                    this.expandCard('pdf-images');
+                    setTimeout(() => this.handleFileForCard('pdf-images', file), 100);
+                }, 300);
             }
         } else if (type.startsWith('image/')) {
             // Multiple images = Images to PDF workflow
             if (files.length > 1) {
-                this.expandCard('images-pdf');
+                this.expandCategory('pdf');
                 setTimeout(() => {
-                    files.forEach(f => {
-                        if (f.type.startsWith('image/')) {
-                            this.addImageFile(f);
-                        }
-                    });
-                }, 100);
+                    this.expandCard('images-pdf');
+                    setTimeout(() => {
+                        files.forEach(f => {
+                            if (f.type.startsWith('image/')) {
+                                this.addImageFile(f);
+                            }
+                        });
+                    }, 100);
+                }, 300);
             } else {
                 // Single image -> Compress Image workflow (most common for office workers)
-                this.expandCard('compress-image');
-                setTimeout(() => this.handleFileForCard('compress-image', file), 100);
+                this.expandCategory('image');
+                setTimeout(() => {
+                    this.expandCard('compress-image');
+                    setTimeout(() => this.handleFileForCard('compress-image', file), 100);
+                }, 300);
             }
+        } else if (type.startsWith('audio/') || /\.(mp3|wav|m4a|ogg|flac|aac)$/i.test(name)) {
+            // Audio file -> Audio to MP3 workflow
+            this.expandCategory('audio');
+            setTimeout(() => {
+                this.expandCard('audio-mp3');
+                setTimeout(() => this.handleFileForCard('audio-mp3', file), 100);
+            }, 300);
         } else {
             // Unknown file type -> Suggest metadata removal
-            this.expandCard('remove-metadata');
-            setTimeout(() => this.handleFileForCard('remove-metadata', file), 100);
+            this.expandCategory('image');
+            setTimeout(() => {
+                this.expandCard('remove-metadata');
+                setTimeout(() => this.handleFileForCard('remove-metadata', file), 100);
+            }, 300);
         }
     }
 
@@ -310,7 +372,7 @@ class MediaPrivacyApp {
         const body = document.getElementById(`body-${cardId}`);
         const closeBtn = card.querySelector('.card-close');
 
-        if (card.classList.contains('expanded')) return;
+        if (!card || card.classList.contains('expanded')) return;
 
         // Collapse other expanded cards
         document.querySelectorAll('.action-card.expanded').forEach(c => {
@@ -323,6 +385,9 @@ class MediaPrivacyApp {
         card.classList.add('expanded');
         body.classList.remove('hidden');
         closeBtn.classList.remove('hidden');
+        
+        // Track expanded card in navigation state
+        this.navigationState.expandedCard = cardId;
     }
 
     collapseCard(cardId) {
@@ -330,12 +395,19 @@ class MediaPrivacyApp {
         const body = document.getElementById(`body-${cardId}`);
         const closeBtn = card.querySelector('.card-close');
 
+        if (!card) return;
+
         card.classList.remove('expanded');
         body.classList.add('hidden');
         closeBtn.classList.add('hidden');
 
         // Reset card state
         this.resetCard(cardId);
+        
+        // Clear expanded card from navigation state
+        if (this.navigationState.expandedCard === cardId) {
+            this.navigationState.expandedCard = null;
+        }
     }
 
     resetCard(cardId) {
