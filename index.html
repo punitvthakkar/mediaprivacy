@@ -15,6 +15,7 @@
 <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js" integrity="sha384-weMABwrltA6jWR8DDe9Jp5blk+tZQh7ugpCsF3JwSA53WZM9/14PjS5LAJNHNjAI" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/pdfkit@0.11.0/js/pdfkit.standalone.js" integrity="sha384-+1TYy4h30Fs7Ni8K4zNoYAhJm2LGRcZxYJ3xWpQt4g9PbFQbnhd7yrDOGnhF6CvS" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/fflate@0.8.2/umd/index.js" integrity="sha384-DT0Ls0mO7JmjTnT+oBuMhEJzYJO1zUqzuuMXNdnOmOQRIpN2BgSjvBV/j50NngIT" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" integrity="sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H" crossorigin="anonymous"></script>
 
 <style>
 /* macOS Tahoe (Liquid Glass) theme — follows system light/dark */
@@ -708,58 +709,57 @@ function buildEmailXhtml(root, content) {
   container.setAttribute('style', 'width:800px;box-sizing:border-box;padding:36px;background:#ffffff;color:#111111;font-family:-apple-system,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.5;overflow-wrap:break-word;word-wrap:break-word');
   container.appendChild(header);
   while (doc.body.firstChild) container.appendChild(doc.body.firstChild);
-  return { xhtml: new XMLSerializer().serializeToString(container), blockedImgs };
+  return { html: container.outerHTML, blockedImgs };
 }
 
-function measureHtml(xhtml) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(new Blob(
-      ['<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0">' + xhtml + '</body></html>'],
-      { type: 'text/html' }));
-    const iframe = document.createElement('iframe');
-    iframe.setAttribute('sandbox', 'allow-same-origin'); // no scripts can run
-    iframe.style.cssText = 'position:absolute;left:-99999px;top:0;width:800px;height:100px;border:0;visibility:hidden';
-    const fail = msg => { URL.revokeObjectURL(url); iframe.remove(); reject(new Error(msg)); };
-    iframe.onload = () => requestAnimationFrame(() => {
-      try {
-        const h = Math.max(iframe.contentDocument.body.scrollHeight, 60);
-        URL.revokeObjectURL(url); iframe.remove(); resolve(h);
-      } catch (e) { fail('Could not measure the email layout.'); }
+// Render sanitized email HTML to an A4-paginated PDF using html2canvas.
+// (Pure canvas drawing — unlike SVG foreignObject, this cannot taint the canvas,
+// which Chrome enforces even for same-origin foreignObject content.)
+async function htmlToPdfDoc(html, ctx) {
+  const iframe = document.createElement('iframe');
+  const url = URL.createObjectURL(new Blob(
+    ['<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;background:#ffffff">' + html + '</body></html>'],
+    { type: 'text/html' }));
+  try {
+    iframe.setAttribute('sandbox', 'allow-same-origin'); // scripts in email HTML can never run
+    iframe.style.cssText = 'position:fixed;left:-10000px;top:0;width:820px;height:600px;border:0;visibility:hidden';
+    await new Promise((res, rej) => {
+      iframe.onload = () => requestAnimationFrame(res);
+      iframe.onerror = () => rej(new Error('Could not load the email layout.'));
+      iframe.src = url;
+      document.body.appendChild(iframe);
     });
-    iframe.onerror = () => fail('Could not load the email layout for measurement.');
-    iframe.src = url;
-    document.body.appendChild(iframe);
-  });
-}
-
-async function htmlToPdfDoc(xhtml, heightPx, ctx) {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="${heightPx}"><foreignObject width="100%" height="100%">${xhtml}</foreignObject></svg>`;
-  const img = await new Promise((res, rej) => {
-    const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
-    const i = new Image();
-    i.onload = () => { URL.revokeObjectURL(url); res(i); };
-    i.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Could not render the email layout — its HTML may be malformed. Try the Plain text layout.')); };
-    i.src = url;
-  });
-  const PAGE_W = 595.28, PAGE_H = 841.89; // A4 points
-  const pagePx = Math.floor(800 * PAGE_H / PAGE_W);
-  const pages = Math.max(1, Math.ceil(heightPx / pagePx));
-  if (pages > 60) throw new Error(`This email is too long for formatted rendering (${pages} pages). Use the Plain text layout.`);
-  const out = await PDFLib.PDFDocument.create();
-  const SCALE = 2;
-  for (let p = 0; p < pages; p++) {
-    const canvas = document.createElement('canvas');
-    canvas.width = 800 * SCALE; canvas.height = pagePx * SCALE;
-    const c2 = canvas.getContext('2d');
-    c2.fillStyle = '#ffffff'; c2.fillRect(0, 0, canvas.width, canvas.height);
-    c2.scale(SCALE, SCALE);
-    c2.drawImage(img, 0, -p * pagePx);
-    const jpg = await canvasToBlob(canvas, 'image/jpeg', 0.92);
-    const em = await out.embedJpg(new Uint8Array(await jpg.arrayBuffer()));
-    out.addPage([PAGE_W, PAGE_H]).drawImage(em, { x: 0, y: 0, width: PAGE_W, height: PAGE_H });
-    ctx.progress(`Rendering page ${p + 1} of ${pages}…`, 45 + Math.round(40 * (p + 1) / pages));
+    const body = iframe.contentDocument.body;
+    const heightPx = Math.max(60, body.scrollHeight);
+    const PAGE_W = 595.28, PAGE_H = 841.89; // A4 points
+    const pagePx = Math.floor(800 * PAGE_H / PAGE_W);
+    const pages = Math.max(1, Math.ceil(heightPx / pagePx));
+    if (pages > 60) throw new Error(`This email is too long for formatted rendering (${pages} pages). Use the Plain text layout.`);
+    // one master render, scale capped by the canvas pixel budget, then slice pages
+    const scale = Math.min(2, Math.sqrt(PIXEL_BUDGET / (800 * heightPx)));
+    ctx.progress('Rendering layout…', 45);
+    const master = await html2canvas(body, {
+      scale, backgroundColor: '#ffffff', logging: false,
+      width: 800, windowWidth: 820, useCORS: false, allowTaint: false
+    });
+    const out = await PDFLib.PDFDocument.create();
+    for (let p = 0; p < pages; p++) {
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.floor(800 * scale);
+      canvas.height = Math.floor(pagePx * scale);
+      const g = canvas.getContext('2d');
+      g.fillStyle = '#ffffff'; g.fillRect(0, 0, canvas.width, canvas.height);
+      g.drawImage(master, 0, -Math.floor(p * pagePx * scale));
+      const jpg = await canvasToBlob(canvas, 'image/jpeg', 0.92);
+      const em = await out.embedJpg(new Uint8Array(await jpg.arrayBuffer()));
+      out.addPage([PAGE_W, PAGE_H]).drawImage(em, { x: 0, y: 0, width: PAGE_W, height: PAGE_H });
+      ctx.progress(`Building page ${p + 1} of ${pages}…`, 60 + Math.round(28 * (p + 1) / pages));
+    }
+    return out;
+  } finally {
+    URL.revokeObjectURL(url);
+    iframe.remove();
   }
-  return out;
 }
 // PDFKit's built-in Helvetica only covers WinAnsi — replace what it can't encode.
 function toWinAnsi(s) {
@@ -977,18 +977,23 @@ const CARDS = [
     const outName = `${stripExt(ctx.file.name)}.pdf`;
     const attNote = attachments.length ? `${attachments.length} attachment name(s) listed — attachment files are not embedded. ` : '';
 
+    let formattedFail = '';
     if (ctx.opt('layout') === 'formatted' && content.html) {
-      ctx.progress('Preparing layout…', 30);
-      const { xhtml, blockedImgs } = buildEmailXhtml(root, content);
-      const heightPx = await measureHtml(xhtml);
-      const pdfDoc = await htmlToPdfDoc(xhtml, heightPx, ctx);
-      ctx.progress('Saving PDF…', 90);
-      return {
-        files: [{ blob: await savePdf(pdfDoc), name: outName }],
-        note: 'Formatting preserved — pages are rendered images, so text is not selectable (use Plain text layout for that). ' +
-          (blockedImgs ? `${blockedImgs} remote image(s) blocked for privacy (they can track opens); embedded images were kept. ` : '') +
-          attNote + 'Document metadata removed.'
-      };
+      try {
+        ctx.progress('Preparing layout…', 30);
+        const { html, blockedImgs } = buildEmailXhtml(root, content);
+        const pdfDoc = await htmlToPdfDoc(html, ctx);
+        ctx.progress('Saving PDF…', 92);
+        return {
+          files: [{ blob: await savePdf(pdfDoc), name: outName }],
+          note: 'Formatting preserved — pages are rendered images, so text is not selectable (use Plain text layout for that). ' +
+            (blockedImgs ? `${blockedImgs} remote image(s) blocked for privacy (they can track opens); embedded images were kept. ` : '') +
+            attNote + 'Document metadata removed.'
+        };
+      } catch (e) {
+        // never dead-end: fall back to the selectable plain-text pipeline
+        formattedFail = `Formatted rendering failed (${e.message || e}) — produced a plain-text PDF instead. `;
+      }
     }
 
     const bodyPart = content.plain ? { kind: 'plain', text: content.plain }
@@ -1023,7 +1028,8 @@ const CARDS = [
     const cleanDoc = await loadPdfLib(await readBytes(rawPdf));
     return {
       files: [{ blob: await savePdf(cleanDoc), name: outName }],
-      note: (ctx.opt('layout') === 'formatted' && !content.html ? 'This email has no HTML formatting — produced a plain-text PDF. ' : '') +
+      note: formattedFail +
+        (ctx.opt('layout') === 'formatted' && !content.html ? 'This email has no HTML formatting — produced a plain-text PDF. ' : '') +
         (bodyPart && bodyPart.kind === 'html' ? 'Body converted from HTML to plain text. ' : '') +
         attNote +
         (replaced ? `${replaced} character(s) outside the built-in PDF font were replaced with "?". ` : '') +
