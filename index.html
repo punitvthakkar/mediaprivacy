@@ -285,50 +285,123 @@ function checkMediaSize(f) {
 function vVideo(f) { if (!isVideoFile(f)) throw new Error('Please select a video file (MP4, MOV, AVI, MKV, WebM…).'); checkMediaSize(f); }
 function vAudio(f) { if (!isAudioFile(f) && !isVideoFile(f)) throw new Error('Please select an audio file (MP3, WAV, M4A, OGG, FLAC…).'); checkMediaSize(f); }
 
-/* ============================ FFmpeg manager ============================ */
-const FF = {
-  ffmpeg: null, loading: null, busy: false, jobCounter: 0,
-  async load() {
-    if (this.ffmpeg) return this.ffmpeg;
-    if (!this.loading) {
-      this.loading = (async () => {
-        const factory = window.createFFmpeg || (window.FFmpeg && window.FFmpeg.createFFmpeg);
+/* ============================ FFmpeg manager ============================
+   The -st build executes ffmpeg.run() synchronously — on the main thread it
+   would freeze the tab for the whole encode. So FFmpeg lives in a dedicated
+   Web Worker; the page only exchanges bytes and progress messages with it. */
+const FFMPEG_LIB = 'https://cdn.jsdelivr.net/npm/@flemist/ffmpeg.wasm-st@0.10.1/dist/ffmpeg.min.js';
+const FFMPEG_CORE = 'https://cdn.jsdelivr.net/npm/@flemist/ffmpeg.wasm-core-st@0.10.0/dist/ffmpeg-core.js';
+const FFMPEG_WORKER_SRC = `
+// Minimal document shim: the wrapper's URL-resolution helper (<base>/<a> trick)
+// needs one; our URLs are already absolute, so property pass-through is correct.
+self.document = {
+  createElement: () => ({ href: '' }),
+  getElementsByTagName: () => [{ appendChild() {}, removeChild() {} }]
+};
+importScripts('${FFMPEG_LIB}');
+// Pre-load the core and pin file resolution to absolute CDN URLs: the wrapper's
+// own loader needs document (absent in workers) and its locateFile only handles
+// the window case. With createFFmpegCore pre-defined, the wrapper skips both.
+importScripts('${FFMPEG_CORE}');
+const CORE_DIR = '${FFMPEG_CORE}'.replace(/[^/]+$/, '');
+const realCore = self.createFFmpegCore;
+self.createFFmpegCore = opts => realCore(Object.assign({}, opts, {
+  locateFile: p => CORE_DIR + p,
+  mainScriptUrlOrBlob: '${FFMPEG_CORE}'
+}));
+let ffmpeg = null;
+self.onmessage = async (e) => {
+  const msg = e.data;
+  try {
+    if (msg.type === 'load') {
+      if (!ffmpeg) {
+        const factory = self.createFFmpeg || (self.FFmpeg && self.FFmpeg.createFFmpeg);
         if (typeof factory !== 'function') throw new Error('The FFmpeg library failed to load from the CDN — check your connection and refresh the page.');
-        const ff = factory({ log: false, corePath: 'https://cdn.jsdelivr.net/npm/@flemist/ffmpeg.wasm-core-st@0.10.0/dist/ffmpeg-core.js' });
-        await ff.load();
-        this.ffmpeg = ff;
-        return ff;
-      })();
+        ffmpeg = factory({ log: false, corePath: '${FFMPEG_CORE}' });
+        await ffmpeg.load();
+      }
+      self.postMessage({ id: msg.id, type: 'done' });
+      return;
+    }
+    if (msg.type === 'run') {
+      ffmpeg.FS('writeFile', msg.inName, new Uint8Array(msg.bytes));
+      ffmpeg.setProgress(({ ratio }) => {
+        if (ratio >= 0 && ratio <= 1) self.postMessage({ id: msg.id, type: 'progress', ratio });
+      });
+      try {
+        await ffmpeg.run(...msg.args);
+        let out;
+        try { out = ffmpeg.FS('readFile', msg.outName); }
+        catch (err) { throw new Error('FFmpeg produced no output — the file may be corrupt or use an unsupported codec.'); }
+        if (!out || !out.length) throw new Error('FFmpeg produced an empty output file.');
+        self.postMessage({ id: msg.id, type: 'done', bytes: out.buffer }, [out.buffer]);
+      } finally {
+        try { ffmpeg.setProgress(() => {}); } catch (err) {}
+        for (const n of [msg.inName, msg.outName]) { try { ffmpeg.FS('unlink', n); } catch (err) {} }
+      }
+    }
+  } catch (err) {
+    self.postMessage({ id: msg.id, type: 'error', message: err.message || String(err) });
+  }
+};`;
+
+const FF = {
+  worker: null, loaded: false, loading: null, busy: false, msgCounter: 0, pending: new Map(),
+  ensureWorker() {
+    if (this.worker) return;
+    const url = URL.createObjectURL(new Blob([FFMPEG_WORKER_SRC], { type: 'application/javascript' }));
+    this.worker = new Worker(url);
+    URL.revokeObjectURL(url);
+    this.worker.onmessage = e => {
+      const m = e.data, p = this.pending.get(m.id);
+      if (!p) return;
+      if (m.type === 'progress') { if (p.onRatio) p.onRatio(m.ratio); return; }
+      this.pending.delete(m.id);
+      if (m.type === 'error') p.reject(new Error(m.message));
+      else p.resolve(m.bytes ? new Uint8Array(m.bytes) : null);
+    };
+    this.worker.onerror = e => {
+      const err = new Error('FFmpeg worker crashed' + (e.message ? ': ' + e.message : '') + '. Please try again.');
+      for (const p of this.pending.values()) p.reject(err);
+      this.pending.clear();
+      try { this.worker.terminate(); } catch (x) {}
+      this.worker = null; this.loaded = false; this.loading = null; this.busy = false;
+    };
+  },
+  call(msg, onRatio, transfer) {
+    this.ensureWorker();
+    const id = ++this.msgCounter;
+    return new Promise((resolve, reject) => {
+      this.pending.set(id, { resolve, reject, onRatio });
+      this.worker.postMessage(Object.assign({ id }, msg), transfer || []);
+    });
+  },
+  async load() {
+    if (this.loaded) return;
+    if (!this.loading) {
+      this.loading = this.call({ type: 'load' }).then(() => { this.loaded = true; });
       this.loading.catch(() => { this.loading = null; });
     }
     return this.loading;
   },
-  // One job at a time; unique MEMFS names; guaranteed cleanup.
+  // One job at a time; unique MEMFS names; input/output buffers are transferred, not copied.
   async run(inputExt, inputBytes, buildArgs, outputExt, onRatio) {
     if (this.busy) throw new Error('Another conversion is already running — please wait for it to finish.');
     this.busy = true;
-    const id = ++this.jobCounter;
-    const inName = `in${id}${inputExt || '.bin'}`, outName = `out${id}${outputExt}`;
-    const ff = this.ffmpeg;
     try {
-      ff.FS('writeFile', inName, inputBytes);
-      ff.setProgress(({ ratio }) => { if (onRatio && ratio >= 0 && ratio <= 1) onRatio(ratio); });
-      await ff.run(...buildArgs(inName, outName));
-      let out;
-      try { out = ff.FS('readFile', outName); }
-      catch (e) { throw new Error('FFmpeg produced no output — the file may be corrupt or use an unsupported codec.'); }
-      if (!out || !out.length) throw new Error('FFmpeg produced an empty output file.');
-      return out;
+      const n = ++this.msgCounter;
+      const inName = `in${n}${inputExt || '.bin'}`, outName = `out${n}${outputExt}`;
+      return await this.call(
+        { type: 'run', inName, outName, args: buildArgs(inName, outName), bytes: inputBytes.buffer },
+        onRatio, [inputBytes.buffer]);
     } finally {
       this.busy = false;
-      try { ff.setProgress(() => {}); } catch (e) {}
-      for (const n of [inName, outName]) { try { ff.FS('unlink', n); } catch (e) {} }
     }
   }
 };
 
 async function ffmpegJob(ctx, file, buildArgs, outputExt, maxPct = 90) {
-  if (!FF.ffmpeg) { ctx.progress('Loading FFmpeg engine (~25 MB, one-time download)…', 5); await FF.load(); }
+  if (!FF.loaded) { ctx.progress('Loading FFmpeg engine (~25 MB, one-time download)…', 5); await FF.load(); }
   ctx.progress('Reading file…', 12);
   const bytes = await readBytes(file);
   ctx.progress('Processing…', 15);
