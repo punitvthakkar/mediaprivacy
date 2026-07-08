@@ -557,6 +557,98 @@ function parseSrt(content) {
   return entries;
 }
 
+/* ============================ EML (email) parsing ============================ */
+function qpToBytes(s) {
+  s = s.replace(/=\r?\n/g, '');
+  const out = [];
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === '=' && /^[0-9A-Fa-f]{2}/.test(s.substr(i + 1, 2))) { out.push(parseInt(s.substr(i + 1, 2), 16)); i += 2; }
+    else out.push(s.charCodeAt(i) & 0xff);
+  }
+  return new Uint8Array(out);
+}
+function decodeCharset(bytes, cs) {
+  try { return new TextDecoder((cs || 'utf-8').toLowerCase()).decode(bytes); }
+  catch (e) { try { return new TextDecoder('utf-8').decode(bytes); } catch (e2) { return new TextDecoder('latin1').decode(bytes); } }
+}
+function decodeMimeWords(s) {
+  return String(s || '')
+    .replace(/(\?=)\s+(=\?)/g, '$1$2') // whitespace between adjacent encoded-words is ignored per RFC 2047
+    .replace(/=\?([^?]+)\?([bBqQ])\?([^?]*)\?=/g, (m, cs, enc, data) => {
+      try {
+        const bytes = enc.toLowerCase() === 'b'
+          ? Uint8Array.from(atob(data), c => c.charCodeAt(0))
+          : qpToBytes(data.replace(/_/g, ' '));
+        return decodeCharset(bytes, cs);
+      } catch (e) { return m; }
+    });
+}
+function parseEmlPart(raw) { // raw: latin1 string of one MIME entity
+  const m = raw.match(/^([\s\S]*?)\r?\n\r?\n([\s\S]*)$/);
+  const headRaw = m ? m[1] : raw, body = m ? m[2] : '';
+  const headers = {};
+  for (const line of headRaw.replace(/\r?\n[ \t]+/g, ' ').split(/\r?\n/)) {
+    const i = line.indexOf(':');
+    if (i > 0) headers[line.slice(0, i).trim().toLowerCase()] = line.slice(i + 1).trim();
+  }
+  return { headers, body };
+}
+function mimeParam(headerVal, name) {
+  const m = (headerVal || '').match(new RegExp(name + '\\s*=\\s*"?([^";]+)"?', 'i'));
+  return m ? m[1].trim() : null;
+}
+function decodeEmlBody(body, headers) {
+  const enc = (headers['content-transfer-encoding'] || '').toLowerCase();
+  const cs = mimeParam(headers['content-type'], 'charset') || 'utf-8';
+  if (enc.includes('base64')) {
+    try { return decodeCharset(Uint8Array.from(atob(body.replace(/\s+/g, '')), c => c.charCodeAt(0)), cs); }
+    catch (e) { throw new Error('Could not decode a base64-encoded section of this email.'); }
+  }
+  if (enc.includes('quoted-printable')) return decodeCharset(qpToBytes(body), cs);
+  return decodeCharset(Uint8Array.from(body, c => c.charCodeAt(0) & 0xff), cs);
+}
+function htmlToText(html) {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, '').replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|tr|h[1-6]|li|blockquote)>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"').replace(/&#(\d+);/g, (m, n) => String.fromCharCode(n))
+    .replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+function extractEmlText(part, depth, attachments) {
+  const ct = (part.headers['content-type'] || 'text/plain').toLowerCase();
+  const disp = part.headers['content-disposition'] || '';
+  const isAttachment = disp.toLowerCase().includes('attachment');
+  const fname = mimeParam(disp, 'filename') || mimeParam(part.headers['content-type'], 'name');
+  if (isAttachment || (fname && !ct.startsWith('text/') && !ct.startsWith('multipart/'))) {
+    attachments.push(decodeMimeWords(fname || '(unnamed file)'));
+    return null;
+  }
+  if (ct.startsWith('multipart/') && depth < 8) {
+    const boundary = mimeParam(part.headers['content-type'], 'boundary');
+    if (!boundary) return null;
+    let plain = null, html = null;
+    for (const piece of part.body.split('--' + boundary).slice(1)) {
+      if (piece.startsWith('--')) break; // closing boundary
+      const got = extractEmlText(parseEmlPart(piece.replace(/^\r?\n/, '')), depth + 1, attachments);
+      if (got && got.kind === 'plain' && !plain) plain = got;
+      else if (got && got.kind === 'html' && !html) html = got;
+    }
+    return plain || html;
+  }
+  if (ct.startsWith('text/plain')) return { kind: 'plain', text: decodeEmlBody(part.body, part.headers) };
+  if (ct.startsWith('text/html')) return { kind: 'html', text: htmlToText(decodeEmlBody(part.body, part.headers)) };
+  return null;
+}
+// PDFKit's built-in Helvetica only covers WinAnsi — replace what it can't encode.
+function toWinAnsi(s) {
+  let replaced = 0;
+  const text = String(s || '').replace(/\r\n?/g, '\n').replace(/\t/g, '  ')
+    .replace(/[^\n\x20-\x7E\xA0-\xFF€‘’“”–—•…]/g, () => { replaced++; return '?'; });
+  return { text, replaced };
+}
+
 /* ============================ card configs ============================ */
 const CATEGORIES = [
   { id: 'pdf', label: 'PDF Tools', color: '#ff453a',
@@ -741,6 +833,55 @@ const CARDS = [
     ctx.progress('Removing metadata…', 85);
     const cleanDoc = await loadPdfLib(await readBytes(raw));
     return { files: [{ blob: await savePdf(cleanDoc), name: `${stripExt(ctx.file.name)}.pdf` }], note: `${entries.length} subtitle entries. Document metadata removed.` };
+  }
+},
+{
+  id: 'eml-pdf', cat: 'pdf', title: 'Email to PDF', desc: 'Convert an .eml message',
+  accept: '.eml,message/rfc822', actionLabel: 'Create PDF',
+  validate: f => { if (!/\.eml$/i.test(f.name) && f.type !== 'message/rfc822') throw new Error('Please select an .eml email file.'); },
+  run: async ctx => {
+    ctx.progress('Parsing email…', 15);
+    const raw = new TextDecoder('latin1').decode(await readBytes(ctx.file));
+    const root = parseEmlPart(raw);
+    if (!root.headers.from && !root.headers.subject && !root.headers.to)
+      throw new Error('This does not look like a valid .eml email file (no From/To/Subject headers found).');
+    const attachments = [];
+    const bodyPart = extractEmlText(root, 0, attachments);
+    ctx.progress('Building PDF…', 45);
+    let replaced = 0;
+    const W = s => { const r = toWinAnsi(s); replaced += r.replaced; return r.text; };
+    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    const chunks = [];
+    doc.on('data', c => chunks.push(c));
+    doc.font('Helvetica-Bold').fontSize(14).text(W(decodeMimeWords(root.headers.subject) || '(no subject)'));
+    doc.moveDown(0.6);
+    for (const [label, key] of [['From', 'from'], ['To', 'to'], ['Cc', 'cc'], ['Date', 'date']]) {
+      if (root.headers[key])
+        doc.font('Helvetica-Bold').fontSize(10).text(label + ':  ', { continued: true })
+           .font('Helvetica').text(W(decodeMimeWords(root.headers[key])));
+    }
+    if (attachments.length)
+      doc.font('Helvetica-Bold').fontSize(10).text('Attachments:  ', { continued: true })
+         .font('Helvetica').text(W(attachments.join(', ')) + '  (files not embedded)');
+    doc.moveDown(0.5);
+    doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor('#999999').lineWidth(0.5).stroke();
+    doc.moveDown(0.8);
+    doc.fillColor('#000000').font('Helvetica').fontSize(11)
+       .text(bodyPart && bodyPart.text ? W(bodyPart.text) : '(no readable message body found)');
+    const rawPdf = await new Promise((res, rej) => {
+      doc.on('end', () => res(new Blob(chunks, { type: 'application/pdf' })));
+      doc.on('error', rej);
+      doc.end();
+    });
+    ctx.progress('Removing metadata…', 85);
+    const cleanDoc = await loadPdfLib(await readBytes(rawPdf));
+    return {
+      files: [{ blob: await savePdf(cleanDoc), name: `${stripExt(ctx.file.name)}.pdf` }],
+      note: (bodyPart && bodyPart.kind === 'html' ? 'Body converted from HTML to plain text. ' : '') +
+        (attachments.length ? `${attachments.length} attachment name(s) listed — attachment files are not embedded. ` : '') +
+        (replaced ? `${replaced} character(s) outside the built-in PDF font were replaced with "?". ` : '') +
+        'Document metadata removed.'
+    };
   }
 },
 
@@ -1261,6 +1402,7 @@ function setupGlobal() {
     const f = files[0];
     let target = null;
     if (isVideoFile(f)) target = 'video-audio';
+    else if (/\.eml$/i.test(f.name) || f.type === 'message/rfc822') target = 'eml-pdf';
     else if (f.type === 'application/pdf' || /\.pdf$/i.test(f.name)) target = files.length > 1 ? 'merge-pdf' : 'pdf-images';
     else if (f.type.startsWith('image/')) target = files.length > 1 ? 'images-pdf' : 'compress-image';
     else if (isAudioFile(f)) target = 'audio-mp3';
