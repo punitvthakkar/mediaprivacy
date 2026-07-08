@@ -6,7 +6,7 @@
 <!-- CSP: scripts only from self + the three pinned CDNs; connect-src limited to CDNs (ffmpeg core fetch).
      'unsafe-inline' is required because all app JS/CSS is inline in this single file;
      'wasm-unsafe-eval'/'unsafe-eval' is required by ffmpeg.wasm; blob: workers are used by pdf.js and ffmpeg.wasm. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com; worker-src blob:; connect-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com blob: data:; img-src 'self' blob: data:; style-src 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com; worker-src blob:; frame-src 'self' blob:; connect-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com blob: data:; img-src 'self' blob: data:; style-src 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>MediaPrivacy</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@flemist/ffmpeg.wasm-st@0.10.1/dist/ffmpeg.min.js" integrity="sha384-R/qIPyKo5wtXabTfcEHyW/CyuR46Hws70HZBh+xtZXyGR2PKnBUWnuZ2ED9jlVse" crossorigin="anonymous"></script>
@@ -616,30 +616,141 @@ function htmlToText(html) {
     .replace(/&quot;/gi, '"').replace(/&#(\d+);/g, (m, n) => String.fromCharCode(n))
     .replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
 }
-function extractEmlText(part, depth, attachments) {
+function bytesToB64(bytes) {
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+function extractEmlContent(part, depth, out) {
   const ct = (part.headers['content-type'] || 'text/plain').toLowerCase();
   const disp = part.headers['content-disposition'] || '';
-  const isAttachment = disp.toLowerCase().includes('attachment');
+  const isAtt = disp.toLowerCase().includes('attachment');
   const fname = mimeParam(disp, 'filename') || mimeParam(part.headers['content-type'], 'name');
-  if (isAttachment || (fname && !ct.startsWith('text/') && !ct.startsWith('multipart/'))) {
-    attachments.push(decodeMimeWords(fname || '(unnamed file)'));
-    return null;
+  const cid = (part.headers['content-id'] || '').replace(/[<>]/g, '').trim().toLowerCase();
+  if (ct.startsWith('image/')) {
+    if (cid) { // referenced inline as cid: — keep as data URI so formatting survives
+      try {
+        const enc = (part.headers['content-transfer-encoding'] || '').toLowerCase();
+        const b64 = enc.includes('base64') ? part.body.replace(/\s+/g, '')
+          : bytesToB64(enc.includes('quoted-printable') ? qpToBytes(part.body) : Uint8Array.from(part.body, c => c.charCodeAt(0) & 0xff));
+        out.inline['cid:' + cid] = 'data:' + ct.split(';')[0].trim() + ';base64,' + b64;
+      } catch (e) {}
+    }
+    if (isAtt || (fname && !cid)) out.attachments.push(decodeMimeWords(fname || '(unnamed image)'));
+    return;
+  }
+  if (isAtt || (fname && !ct.startsWith('text/') && !ct.startsWith('multipart/'))) {
+    out.attachments.push(decodeMimeWords(fname || '(unnamed file)'));
+    return;
   }
   if (ct.startsWith('multipart/') && depth < 8) {
     const boundary = mimeParam(part.headers['content-type'], 'boundary');
-    if (!boundary) return null;
-    let plain = null, html = null;
+    if (!boundary) return;
     for (const piece of part.body.split('--' + boundary).slice(1)) {
       if (piece.startsWith('--')) break; // closing boundary
-      const got = extractEmlText(parseEmlPart(piece.replace(/^\r?\n/, '')), depth + 1, attachments);
-      if (got && got.kind === 'plain' && !plain) plain = got;
-      else if (got && got.kind === 'html' && !html) html = got;
+      extractEmlContent(parseEmlPart(piece.replace(/^\r?\n/, '')), depth + 1, out);
     }
-    return plain || html;
+    return;
   }
-  if (ct.startsWith('text/plain')) return { kind: 'plain', text: decodeEmlBody(part.body, part.headers) };
-  if (ct.startsWith('text/html')) return { kind: 'html', text: htmlToText(decodeEmlBody(part.body, part.headers)) };
-  return null;
+  if (ct.startsWith('text/plain') && !out.plain) out.plain = decodeEmlBody(part.body, part.headers);
+  else if (ct.startsWith('text/html') && !out.html) out.html = decodeEmlBody(part.body, part.headers);
+}
+
+/* --- formatted email rendering: sanitize → measure → rasterize via SVG foreignObject → paginate --- */
+function buildEmailXhtml(root, content) {
+  const doc = new DOMParser().parseFromString(content.html, 'text/html');
+  let blockedImgs = 0;
+  doc.querySelectorAll('script, iframe, frame, object, embed, meta, base, form, input, button, select, textarea, audio, video, link').forEach(el => el.remove());
+  doc.querySelectorAll('*').forEach(el => {
+    for (const a of [...el.attributes]) {
+      const n = a.name.toLowerCase(), v = a.value;
+      if (n.startsWith('on')) { el.removeAttribute(a.name); continue; }
+      if (n === 'href' && /^\s*javascript:/i.test(v)) { el.removeAttribute(a.name); continue; }
+      if (n === 'src' || n === 'background') {
+        const key = v.trim().toLowerCase();
+        if (key.startsWith('cid:') && content.inline[key]) el.setAttribute(a.name, content.inline[key]);
+        else if (/^data:image\//i.test(v)) { /* keep */ }
+        else {
+          el.removeAttribute(a.name);
+          if (el.tagName === 'IMG') {
+            blockedImgs++;
+            const ph = doc.createElement('span');
+            ph.setAttribute('style', 'display:inline-block;padding:4px 10px;background:#f0f0f0;color:#8a8a8a;font-size:11px;border-radius:4px');
+            ph.textContent = '[remote image blocked' + (el.getAttribute('alt') ? ': ' + el.getAttribute('alt') : '') + ']';
+            el.replaceWith(ph);
+            break;
+          }
+        }
+      }
+    }
+  });
+  const H = k => esc(decodeMimeWords(root.headers[k] || ''));
+  const hdrRows = [['From', 'from'], ['To', 'to'], ['Cc', 'cc'], ['Date', 'date']]
+    .filter(([, k]) => root.headers[k])
+    .map(([l, k]) => `<div style="margin:2px 0"><b>${l}:</b>&#160; ${H(k)}</div>`).join('');
+  const attRow = content.attachments.length
+    ? `<div style="margin:2px 0"><b>Attachments:</b>&#160; ${esc(content.attachments.join(', '))} <i>(files not embedded)</i></div>` : '';
+  const header = doc.createElement('div');
+  header.innerHTML =
+    `<div style="font-size:19px;font-weight:700;margin-bottom:10px">${H('subject') || '(no subject)'}</div>` +
+    `<div style="font-size:12px;color:#555555">${hdrRows}${attRow}</div>` +
+    `<div style="border-bottom:1px solid #dddddd;margin:16px 0"></div>`;
+  const container = doc.createElement('div');
+  container.setAttribute('style', 'width:800px;box-sizing:border-box;padding:36px;background:#ffffff;color:#111111;font-family:-apple-system,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.5;overflow-wrap:break-word;word-wrap:break-word');
+  container.appendChild(header);
+  while (doc.body.firstChild) container.appendChild(doc.body.firstChild);
+  return { xhtml: new XMLSerializer().serializeToString(container), blockedImgs };
+}
+
+function measureHtml(xhtml) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(new Blob(
+      ['<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0">' + xhtml + '</body></html>'],
+      { type: 'text/html' }));
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('sandbox', 'allow-same-origin'); // no scripts can run
+    iframe.style.cssText = 'position:absolute;left:-99999px;top:0;width:800px;height:100px;border:0;visibility:hidden';
+    const fail = msg => { URL.revokeObjectURL(url); iframe.remove(); reject(new Error(msg)); };
+    iframe.onload = () => requestAnimationFrame(() => {
+      try {
+        const h = Math.max(iframe.contentDocument.body.scrollHeight, 60);
+        URL.revokeObjectURL(url); iframe.remove(); resolve(h);
+      } catch (e) { fail('Could not measure the email layout.'); }
+    });
+    iframe.onerror = () => fail('Could not load the email layout for measurement.');
+    iframe.src = url;
+    document.body.appendChild(iframe);
+  });
+}
+
+async function htmlToPdfDoc(xhtml, heightPx, ctx) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="${heightPx}"><foreignObject width="100%" height="100%">${xhtml}</foreignObject></svg>`;
+  const img = await new Promise((res, rej) => {
+    const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+    const i = new Image();
+    i.onload = () => { URL.revokeObjectURL(url); res(i); };
+    i.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Could not render the email layout — its HTML may be malformed. Try the Plain text layout.')); };
+    i.src = url;
+  });
+  const PAGE_W = 595.28, PAGE_H = 841.89; // A4 points
+  const pagePx = Math.floor(800 * PAGE_H / PAGE_W);
+  const pages = Math.max(1, Math.ceil(heightPx / pagePx));
+  if (pages > 60) throw new Error(`This email is too long for formatted rendering (${pages} pages). Use the Plain text layout.`);
+  const out = await PDFLib.PDFDocument.create();
+  const SCALE = 2;
+  for (let p = 0; p < pages; p++) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 800 * SCALE; canvas.height = pagePx * SCALE;
+    const c2 = canvas.getContext('2d');
+    c2.fillStyle = '#ffffff'; c2.fillRect(0, 0, canvas.width, canvas.height);
+    c2.scale(SCALE, SCALE);
+    c2.drawImage(img, 0, -p * pagePx);
+    const jpg = await canvasToBlob(canvas, 'image/jpeg', 0.92);
+    const em = await out.embedJpg(new Uint8Array(await jpg.arrayBuffer()));
+    out.addPage([PAGE_W, PAGE_H]).drawImage(em, { x: 0, y: 0, width: PAGE_W, height: PAGE_H });
+    ctx.progress(`Rendering page ${p + 1} of ${pages}…`, 45 + Math.round(40 * (p + 1) / pages));
+  }
+  return out;
 }
 // PDFKit's built-in Helvetica only covers WinAnsi — replace what it can't encode.
 function toWinAnsi(s) {
@@ -839,14 +950,40 @@ const CARDS = [
   id: 'eml-pdf', cat: 'pdf', title: 'Email to PDF', desc: 'Convert an .eml message',
   accept: '.eml,message/rfc822', actionLabel: 'Create PDF',
   validate: f => { if (!/\.eml$/i.test(f.name) && f.type !== 'message/rfc822') throw new Error('Please select an .eml email file.'); },
+  options: [{
+    type: 'radio', id: 'layout', label: 'Layout', value: 'formatted', choices: [
+      ['formatted', 'Formatted — preserves the email’s look (rendered as images)'],
+      ['text', 'Plain text — selectable & compact']
+    ]
+  }],
   run: async ctx => {
     ctx.progress('Parsing email…', 15);
     const raw = new TextDecoder('latin1').decode(await readBytes(ctx.file));
     const root = parseEmlPart(raw);
     if (!root.headers.from && !root.headers.subject && !root.headers.to)
       throw new Error('This does not look like a valid .eml email file (no From/To/Subject headers found).');
-    const attachments = [];
-    const bodyPart = extractEmlText(root, 0, attachments);
+    const content = { plain: null, html: null, attachments: [], inline: {} };
+    extractEmlContent(root, 0, content);
+    const attachments = content.attachments;
+    const outName = `${stripExt(ctx.file.name)}.pdf`;
+    const attNote = attachments.length ? `${attachments.length} attachment name(s) listed — attachment files are not embedded. ` : '';
+
+    if (ctx.opt('layout') === 'formatted' && content.html) {
+      ctx.progress('Preparing layout…', 30);
+      const { xhtml, blockedImgs } = buildEmailXhtml(root, content);
+      const heightPx = await measureHtml(xhtml);
+      const pdfDoc = await htmlToPdfDoc(xhtml, heightPx, ctx);
+      ctx.progress('Saving PDF…', 90);
+      return {
+        files: [{ blob: await savePdf(pdfDoc), name: outName }],
+        note: 'Formatting preserved — pages are rendered images, so text is not selectable (use Plain text layout for that). ' +
+          (blockedImgs ? `${blockedImgs} remote image(s) blocked for privacy (they can track opens); embedded images were kept. ` : '') +
+          attNote + 'Document metadata removed.'
+      };
+    }
+
+    const bodyPart = content.plain ? { kind: 'plain', text: content.plain }
+      : content.html ? { kind: 'html', text: htmlToText(content.html) } : null;
     ctx.progress('Building PDF…', 45);
     let replaced = 0;
     const W = s => { const r = toWinAnsi(s); replaced += r.replaced; return r.text; };
@@ -876,9 +1013,10 @@ const CARDS = [
     ctx.progress('Removing metadata…', 85);
     const cleanDoc = await loadPdfLib(await readBytes(rawPdf));
     return {
-      files: [{ blob: await savePdf(cleanDoc), name: `${stripExt(ctx.file.name)}.pdf` }],
-      note: (bodyPart && bodyPart.kind === 'html' ? 'Body converted from HTML to plain text. ' : '') +
-        (attachments.length ? `${attachments.length} attachment name(s) listed — attachment files are not embedded. ` : '') +
+      files: [{ blob: await savePdf(cleanDoc), name: outName }],
+      note: (ctx.opt('layout') === 'formatted' && !content.html ? 'This email has no HTML formatting — produced a plain-text PDF. ' : '') +
+        (bodyPart && bodyPart.kind === 'html' ? 'Body converted from HTML to plain text. ' : '') +
+        attNote +
         (replaced ? `${replaced} character(s) outside the built-in PDF font were replaced with "?". ` : '') +
         'Document metadata removed.'
     };
