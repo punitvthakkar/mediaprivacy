@@ -1,0 +1,1218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- CSP: scripts only from self + the three pinned CDNs; connect-src limited to CDNs (ffmpeg core fetch).
+     'unsafe-inline' is required because all app JS/CSS is inline in this single file;
+     'wasm-unsafe-eval'/'unsafe-eval' is required by ffmpeg.wasm; blob: workers are used by pdf.js and ffmpeg.wasm. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com; worker-src blob:; connect-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com blob: data:; img-src 'self' blob: data:; style-src 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>MediaPrivacy</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@flemist/ffmpeg.wasm-st@0.10.1/dist/ffmpeg.min.js" integrity="sha384-R/qIPyKo5wtXabTfcEHyW/CyuR46Hws70HZBh+xtZXyGR2PKnBUWnuZ2ED9jlVse" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.9.359/pdf.min.js" integrity="sha384-M6SriHuTE+NacRvOJzawYQ1EwiClMxJ2lqRm24xwsKjUjREpyB7KJE6ezX1eXz8w" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js" integrity="sha384-weMABwrltA6jWR8DDe9Jp5blk+tZQh7ugpCsF3JwSA53WZM9/14PjS5LAJNHNjAI" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/pdfkit@0.11.0/js/pdfkit.standalone.js" integrity="sha384-+1TYy4h30Fs7Ni8K4zNoYAhJm2LGRcZxYJ3xWpQt4g9PbFQbnhd7yrDOGnhF6CvS" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/fflate@0.8.2/umd/index.js" integrity="sha384-DT0Ls0mO7JmjTnT+oBuMhEJzYJO1zUqzuuMXNdnOmOQRIpN2BgSjvBV/j50NngIT" crossorigin="anonymous"></script>
+
+<style>
+/* macOS Tahoe (Liquid Glass) theme — follows system light/dark */
+:root {
+  color-scheme: light dark;
+  --bg: #f2f2f7;
+  --glow-1: rgba(255, 90, 60, 0.13);
+  --glow-2: rgba(191, 90, 242, 0.11);
+  --glow-3: rgba(50, 173, 230, 0.13);
+  --glow-4: rgba(255, 159, 10, 0.10);
+  --panel: rgba(255, 255, 255, 0.68);
+  --panel-solid: #ffffff;
+  --hairline: rgba(0, 0, 0, 0.10);
+  --hairline-soft: rgba(0, 0, 0, 0.06);
+  --text: #1d1d1f;
+  --text-2: #6e6e73;
+  --text-3: #aeaeb2;
+  --accent: #007aff;
+  --accent-press: #0069d9;
+  --on-accent: #ffffff;
+  --fill: rgba(120, 120, 128, 0.12);
+  --fill-2: rgba(120, 120, 128, 0.20);
+  --green: #34c759;
+  --err-bg: rgba(255, 245, 245, 0.85);
+  --err-border: rgba(255, 59, 48, 0.35);
+  --err-text: #d70015;
+  --shadow: 0 0.5px 1px rgba(0,0,0,0.05), 0 10px 30px rgba(0,0,0,0.08);
+  --shadow-lg: 0 0.5px 1px rgba(0,0,0,0.06), 0 18px 50px rgba(0,0,0,0.14);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #000000;
+    --glow-1: rgba(255, 90, 60, 0.17);
+    --glow-2: rgba(191, 90, 242, 0.16);
+    --glow-3: rgba(50, 173, 230, 0.17);
+    --glow-4: rgba(255, 159, 10, 0.13);
+    --panel: rgba(28, 28, 30, 0.68);
+    --panel-solid: #1c1c1e;
+    --hairline: rgba(255, 255, 255, 0.12);
+    --hairline-soft: rgba(255, 255, 255, 0.07);
+    --text: #f5f5f7;
+    --text-2: #98989d;
+    --text-3: #636366;
+    --accent: #0a84ff;
+    --accent-press: #3395ff;
+    --fill: rgba(120, 120, 128, 0.24);
+    --fill-2: rgba(120, 120, 128, 0.36);
+    --green: #30d158;
+    --err-bg: rgba(60, 20, 22, 0.85);
+    --err-border: rgba(255, 69, 58, 0.45);
+    --err-text: #ff453a;
+    --shadow: 0 0.5px 1px rgba(0,0,0,0.5), 0 10px 30px rgba(0,0,0,0.55);
+    --shadow-lg: 0 0.5px 1px rgba(0,0,0,0.6), 0 18px 50px rgba(0,0,0,0.7);
+  }
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.47;
+  font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+}
+body::before {
+  content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background-image: radial-gradient(700px 460px at 8% -6%, var(--glow-1), transparent 70%),
+                    radial-gradient(800px 540px at 92% 10%, var(--glow-2), transparent 70%),
+                    radial-gradient(720px 520px at 18% 108%, var(--glow-3), transparent 70%),
+                    radial-gradient(620px 460px at 80% 62%, var(--glow-4), transparent 72%);
+}
+header { text-align: center; padding: 52px 20px 22px; }
+header h1 { font-size: 2.1rem; font-weight: 700; letter-spacing: -0.022em; }
+header p { color: var(--text-2); margin-top: 7px; font-size: 0.95rem; }
+main { max-width: 1060px; margin: 0 auto; padding: 0 20px 60px; }
+footer { text-align: center; color: var(--text-3); font-size: 0.8rem; padding: 28px 20px 48px; }
+footer b { color: var(--text-2); font-weight: 590; }
+.hidden { display: none !important; }
+
+#errPanel {
+  position: fixed; top: 18px; left: 50%; transform: translateX(-50%); z-index: 50;
+  background: var(--err-bg);
+  -webkit-backdrop-filter: blur(24px) saturate(180%); backdrop-filter: blur(24px) saturate(180%);
+  border: 0.5px solid var(--err-border); color: var(--err-text);
+  padding: 12px 16px; border-radius: 14px; max-width: 640px;
+  display: flex; gap: 14px; align-items: flex-start;
+  box-shadow: var(--shadow-lg); font-size: 0.9rem;
+}
+#errPanel button { background: none; border: none; color: var(--err-text); font-size: 1.05rem; cursor: pointer; line-height: 1; padding: 0 2px; }
+
+.cat { margin-top: 34px; }
+.cat-head { display: flex; align-items: center; gap: 10px; margin: 0 4px 12px; }
+.cat-head .cat-ic {
+  width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--cat) 82%, #ffffff), var(--cat));
+  color: #fff;
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--cat) 45%, transparent), inset 0 0.5px 0 rgba(255,255,255,0.4);
+}
+.cat-head .cat-ic svg { width: 15px; height: 15px; }
+.cat-head h2 { font-size: 0.82rem; font-weight: 600; color: var(--text); text-transform: uppercase; letter-spacing: 0.06em; }
+.cat-head .key { color: var(--text-3); font-size: 0.7rem; border: 0.5px solid var(--hairline); border-radius: 5px; padding: 1px 6px; background: var(--fill); font-variant-numeric: tabular-nums; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(235px, 1fr)); gap: 12px; }
+
+.card {
+  background: var(--panel);
+  -webkit-backdrop-filter: blur(28px) saturate(180%); backdrop-filter: blur(28px) saturate(180%);
+  border: 0.5px solid var(--hairline);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+.card:hover { transform: translateY(-1px); box-shadow: var(--shadow-lg); }
+.card.open { grid-column: 1 / -1; border-color: color-mix(in srgb, var(--cat, var(--accent)) 40%, transparent); transform: none; box-shadow: var(--shadow-lg); }
+.card-head { display: flex; align-items: center; gap: 12px; padding: 15px 17px; cursor: pointer; user-select: none; }
+.card-head .ic {
+  width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.85rem; font-weight: 600; color: var(--cat, var(--text-2));
+  background: color-mix(in srgb, var(--cat, #8e8e93) 16%, transparent);
+  font-variant-numeric: tabular-nums;
+}
+.card-head .t { font-weight: 590; font-size: 0.92rem; letter-spacing: -0.01em; }
+.card-head .d { color: var(--text-2); font-size: 0.78rem; }
+.card-head .x { margin-left: auto; background: var(--fill); border: none; color: var(--text-2); font-size: 0.95rem; cursor: pointer; width: 26px; height: 26px; border-radius: 50%; line-height: 1; }
+.card-head .x:hover { background: var(--fill-2); }
+.card-body { padding: 2px 17px 18px; }
+
+.dz {
+  border: 1.5px dashed var(--hairline); border-radius: 14px;
+  padding: 36px 16px; text-align: center; color: var(--text-2);
+  cursor: pointer; transition: all .15s ease; font-size: 0.9rem;
+}
+.dz:hover, .dz.over { border-color: var(--cat, var(--accent)); color: var(--cat, var(--accent)); background: color-mix(in srgb, var(--cat, var(--accent)) 7%, transparent); }
+
+.fileinfo { display: flex; align-items: center; gap: 8px; background: var(--fill); border-radius: 10px; padding: 9px 13px; margin-bottom: 13px; font-size: 0.88rem; flex-wrap: wrap; }
+.fileinfo .fi-size { color: var(--text-2); font-size: 0.8rem; }
+.fileinfo .clear { margin-left: auto; background: none; border: none; color: var(--text-2); cursor: pointer; font-size: 0.95rem; }
+.flist { margin-bottom: 12px; }
+.flist .fitem { display: flex; align-items: center; gap: 8px; padding: 8px 13px; background: var(--fill); border-radius: 9px; margin-bottom: 6px; font-size: 0.85rem; }
+.flist .fitem .sz { color: var(--text-2); font-size: 0.75rem; }
+.flist .fitem button { margin-left: auto; background: none; border: none; color: var(--text-2); cursor: pointer; }
+.addmore { background: none; border: 1.5px dashed var(--hairline); color: var(--text-2); border-radius: 980px; padding: 7px 16px; cursor: pointer; font-size: 0.82rem; margin-bottom: 14px; font-family: inherit; }
+.addmore:hover { border-color: var(--accent); color: var(--accent); }
+
+.opt-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; font-size: 0.88rem; flex-wrap: wrap; }
+.opt-row > label { min-width: 112px; color: var(--text-2); }
+.opt-row select, .opt-row input[type=number], .opt-row input[type=text] {
+  background: var(--panel-solid); border: 0.5px solid var(--hairline); color: var(--text);
+  border-radius: 8px; padding: 6px 10px; font-size: 0.88rem; font-family: inherit;
+  box-shadow: 0 0.5px 2px rgba(0,0,0,0.04);
+}
+.opt-row select:focus, .opt-row input:focus { outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent); outline-offset: 0; border-color: var(--accent); }
+.opt-row input[type=number] { width: 100px; }
+.opt-row input[type=text] { width: 210px; }
+.opt-row input[type=range] { width: 180px; accent-color: var(--accent); }
+.opt-row .rv { color: var(--text-2); font-size: 0.83rem; min-width: 44px; font-variant-numeric: tabular-nums; }
+.opt-row .rl { margin-right: 4px; color: var(--text); cursor: pointer; display: inline-block; padding: 2px 0; }
+.opt-row input[type=radio], .opt-row input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; vertical-align: -2px; }
+.hint { color: var(--text-2); font-size: 0.78rem; margin: -4px 0 12px; }
+
+button.go {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--cat, var(--accent)) 88%, #ffffff), var(--cat, var(--accent)));
+  color: var(--on-accent); border: none;
+  border-radius: 980px; padding: 8px 22px; font-size: 0.9rem; font-weight: 590;
+  cursor: pointer; margin-top: 6px; font-family: inherit;
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--cat, var(--accent)) 40%, transparent), inset 0 0.5px 0 rgba(255,255,255,0.35);
+  transition: filter .12s ease, transform .12s ease;
+}
+button.go:hover { filter: brightness(0.94) saturate(1.1); }
+button.go:active { transform: scale(0.97); }
+button.sec {
+  background: var(--fill); color: var(--text); border: none;
+  border-radius: 980px; padding: 8px 18px; font-size: 0.88rem; font-weight: 500;
+  cursor: pointer; margin-right: 8px; margin-top: 6px; font-family: inherit;
+}
+button.sec:hover { background: var(--fill-2); }
+
+.prog { padding: 14px 0 4px; }
+.prog .pstat { font-size: 0.86rem; color: var(--text-2); margin-bottom: 10px; }
+.prog .bar { height: 6px; background: var(--fill); border-radius: 3px; overflow: hidden; }
+.prog .fill { height: 100%; width: 0%; background: var(--cat, var(--accent)); border-radius: 3px; transition: width .25s ease; }
+.prog .ppct { text-align: right; color: var(--text-3); font-size: 0.78rem; margin-top: 6px; font-variant-numeric: tabular-nums; }
+
+.result { padding: 10px 0 2px; }
+.result .ok { color: var(--green); font-weight: 590; font-size: 0.92rem; margin-bottom: 6px; }
+.result .rnote { color: var(--text-2); font-size: 0.85rem; margin-bottom: 12px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>MediaPrivacy</h1>
+  <p>Convert, compress &amp; clean files &mdash; processed 100% in your browser. Nothing is uploaded.</p>
+</header>
+
+<div id="errPanel" class="hidden"><span id="errMsg"></span><button id="errX" title="Dismiss">&times;</button></div>
+
+<main id="cats"></main>
+
+<footer>Files never leave your device. Keyboard: <b>1&ndash;4</b> jump to a category &middot; <b>Esc</b> closes a tool.</footer>
+
+<script>
+'use strict';
+/* ============================ helpers ============================ */
+const $ = id => document.getElementById(id);
+const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+const fmtSize = b => b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(1) + ' KB' : b < 1073741824 ? (b / 1048576).toFixed(1) + ' MB' : (b / 1073741824).toFixed(2) + ' GB';
+const stripExt = n => n.replace(/\.[^.]+$/, '');
+const extOf = n => (n.match(/\.[^.]+$/) || [''])[0].toLowerCase();
+
+function showError(msg) { $('errMsg').textContent = msg; $('errPanel').classList.remove('hidden'); }
+$('errX') && $('errX').addEventListener('click', () => $('errPanel').classList.add('hidden'));
+
+function readBytes(fileOrBlob) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(new Uint8Array(r.result));
+    r.onerror = () => rej(new Error('Failed to read file.'));
+    r.readAsArrayBuffer(fileOrBlob);
+  });
+}
+
+function loadImage(blob) {
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); res(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Could not decode this image — the file may be corrupt or in an unsupported format.')); };
+    img.src = url;
+  });
+}
+
+function canvasToBlob(canvas, type, quality) {
+  return new Promise((res, rej) =>
+    canvas.toBlob(b => b ? res(b) : rej(new Error('Image encoding failed — the image may exceed browser canvas limits.')), type, quality));
+}
+
+function drawToCanvas(src, w, h) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  c.getContext('2d').drawImage(src, 0, 0, w, h);
+  return c;
+}
+
+function downloadBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+async function zipFiles(files) {
+  const entries = {};
+  for (const f of files) entries[f.name] = new Uint8Array(await f.blob.arrayBuffer());
+  return new Blob([fflate.zipSync(entries, { level: 0 })], { type: 'application/zip' });
+}
+
+const MAX_MEDIA = 500 * 1048576;
+const isVideoFile = f => f.type.startsWith('video/') || /\.(mp4|mov|avi|mkv|webm|m4v|wmv|flv|3gp|ogv)$/i.test(f.name);
+const isAudioFile = f => f.type.startsWith('audio/') || /\.(mp3|wav|m4a|ogg|aac|flac|wma|opus)$/i.test(f.name);
+function checkMediaSize(f) {
+  if (f.size > MAX_MEDIA) throw new Error(`File is too large (${fmtSize(f.size)}). In-browser conversion is limited to 500 MB by browser memory constraints.`);
+}
+function vVideo(f) { if (!isVideoFile(f)) throw new Error('Please select a video file (MP4, MOV, AVI, MKV, WebM…).'); checkMediaSize(f); }
+function vAudio(f) { if (!isAudioFile(f) && !isVideoFile(f)) throw new Error('Please select an audio file (MP3, WAV, M4A, OGG, FLAC…).'); checkMediaSize(f); }
+
+/* ============================ FFmpeg manager ============================ */
+const FF = {
+  ffmpeg: null, loading: null, busy: false, jobCounter: 0,
+  async load() {
+    if (this.ffmpeg) return this.ffmpeg;
+    if (!this.loading) {
+      this.loading = (async () => {
+        const factory = window.createFFmpeg || (window.FFmpeg && window.FFmpeg.createFFmpeg);
+        if (typeof factory !== 'function') throw new Error('The FFmpeg library failed to load from the CDN — check your connection and refresh the page.');
+        const ff = factory({ log: false, corePath: 'https://cdn.jsdelivr.net/npm/@flemist/ffmpeg.wasm-core-st@0.10.0/dist/ffmpeg-core.js' });
+        await ff.load();
+        this.ffmpeg = ff;
+        return ff;
+      })();
+      this.loading.catch(() => { this.loading = null; });
+    }
+    return this.loading;
+  },
+  // One job at a time; unique MEMFS names; guaranteed cleanup.
+  async run(inputExt, inputBytes, buildArgs, outputExt, onRatio) {
+    if (this.busy) throw new Error('Another conversion is already running — please wait for it to finish.');
+    this.busy = true;
+    const id = ++this.jobCounter;
+    const inName = `in${id}${inputExt || '.bin'}`, outName = `out${id}${outputExt}`;
+    const ff = this.ffmpeg;
+    try {
+      ff.FS('writeFile', inName, inputBytes);
+      ff.setProgress(({ ratio }) => { if (onRatio && ratio >= 0 && ratio <= 1) onRatio(ratio); });
+      await ff.run(...buildArgs(inName, outName));
+      let out;
+      try { out = ff.FS('readFile', outName); }
+      catch (e) { throw new Error('FFmpeg produced no output — the file may be corrupt or use an unsupported codec.'); }
+      if (!out || !out.length) throw new Error('FFmpeg produced an empty output file.');
+      return out;
+    } finally {
+      this.busy = false;
+      try { ff.setProgress(() => {}); } catch (e) {}
+      for (const n of [inName, outName]) { try { ff.FS('unlink', n); } catch (e) {} }
+    }
+  }
+};
+
+async function ffmpegJob(ctx, file, buildArgs, outputExt, maxPct = 90) {
+  if (!FF.ffmpeg) { ctx.progress('Loading FFmpeg engine (~25 MB, one-time download)…', 5); await FF.load(); }
+  ctx.progress('Reading file…', 12);
+  const bytes = await readBytes(file);
+  ctx.progress('Processing…', 15);
+  return FF.run(extOf(file.name), bytes, buildArgs, outputExt,
+    r => ctx.progress('Processing…', Math.min(maxPct, 15 + Math.round(r * (maxPct - 15)))));
+}
+
+/* ============================ metadata stripping (throws on failure — never silently returns the original) ============================ */
+const CANVAS_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+async function stripImageMeta(blob, type) {
+  if (!CANVAS_TYPES.includes(type))
+    throw new Error(`Cannot safely remove metadata from ${type || 'this image format'} — it would require lossy format conversion. Supported: JPEG, PNG, WebP.`);
+  const img = await loadImage(blob);
+  const canvas = drawToCanvas(img, img.naturalWidth, img.naturalHeight);
+  return canvasToBlob(canvas, type, type === 'image/jpeg' ? 0.95 : undefined);
+}
+
+/* ============================ PDF helpers ============================ */
+async function loadPdfLib(bytes) {
+  try { return await PDFLib.PDFDocument.load(bytes); }
+  catch (e) {
+    if (/encrypt/i.test(String(e && e.message || e))) throw new Error('This PDF is password-protected and cannot be processed.');
+    throw new Error('Could not read this PDF: ' + ((e && e.message) || e));
+  }
+}
+function clearPdfMeta(doc) {
+  doc.setTitle(''); doc.setAuthor(''); doc.setSubject(''); doc.setKeywords([]);
+  doc.setProducer(''); doc.setCreator('');
+  const d = new Date(0);
+  doc.setCreationDate(d); doc.setModificationDate(d);
+}
+async function savePdf(doc) {
+  clearPdfMeta(doc);
+  const bytes = await doc.save({ useObjectStreams: true });
+  return new Blob([bytes], { type: 'application/pdf' });
+}
+
+async function openPdfJs(file) {
+  const bytes = await readBytes(file); // fresh read each time — no ArrayBuffer reuse, no detachment bugs
+  try { return await pdfjsLib.getDocument({ data: bytes }).promise; }
+  catch (e) { throw new Error('Could not read this PDF: ' + ((e && e.message) || e)); }
+}
+
+const PIXEL_BUDGET = 16000000; // safe canvas ceiling across browsers
+async function renderPdfPage(pdf, pageNum, targetScale) {
+  const page = await pdf.getPage(pageNum);
+  const vp1 = page.getViewport({ scale: 1 });
+  let scale = targetScale;
+  if (vp1.width * vp1.height * scale * scale > PIXEL_BUDGET)
+    scale = Math.sqrt(PIXEL_BUDGET / (vp1.width * vp1.height));
+  const viewport = page.getViewport({ scale });
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.floor(viewport.width);
+  canvas.height = Math.floor(viewport.height);
+  await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+  return { canvas, pageWidth: vp1.width, pageHeight: vp1.height };
+}
+
+function parsePageRanges(input, maxPages) {
+  const pages = new Set();
+  for (const part of String(input || '').split(',')) {
+    const m = part.trim().match(/^(\d+)(?:\s*-\s*(\d+))?$/);
+    if (!m) continue;
+    const a = parseInt(m[1], 10), b = m[2] ? parseInt(m[2], 10) : a;
+    for (let i = a; i <= b; i++) if (i >= 1 && i <= maxPages) pages.add(i);
+  }
+  const arr = [...pages].sort((x, y) => x - y);
+  if (!arr.length) throw new Error(`No valid pages in "${input}" — this document has ${maxPages} page(s). Example: 1-3, 5, 8`);
+  return arr;
+}
+
+/* --- PDF compression Tier 2: recompress embedded JPEG images in place, keep text/vectors --- */
+async function decodeToDrawable(blob) {
+  if (window.createImageBitmap) return createImageBitmap(blob);
+  const img = await loadImage(blob);
+  return { width: img.naturalWidth, height: img.naturalHeight, _img: img, close() {} };
+}
+async function recompressPdfImages(doc, quality, maxDim, onProgress) {
+  const { PDFRawStream, PDFName, PDFNumber, PDFArray, PDFRef } = PDFLib;
+  const lookup = v => (v instanceof PDFRef ? doc.context.lookup(v) : v);
+  const objs = doc.context.enumerateIndirectObjects();
+  let recompressed = 0, scanned = 0;
+  for (const [ref, obj] of objs) {
+    scanned++;
+    if (!(obj instanceof PDFRawStream)) continue;
+    try {
+      const dict = obj.dict;
+      if (lookup(dict.get(PDFName.of('Subtype'))) !== PDFName.of('Image')) continue;
+      let filter = lookup(dict.get(PDFName.of('Filter')));
+      if (filter instanceof PDFArray) filter = filter.size() === 1 ? lookup(filter.get(0)) : null;
+      if (filter !== PDFName.of('DCTDecode')) continue;         // only plain JPEG streams
+      if (dict.get(PDFName.of('SMask'))) continue;              // skip masked images — never corrupt transparency
+      const srcBytes = obj.contents;
+      if (!srcBytes || srcBytes.length < 20000) continue;       // not worth touching small images
+      const bmp = await decodeToDrawable(new Blob([srcBytes], { type: 'image/jpeg' }));
+      const ratio = Math.min(1, maxDim / Math.max(bmp.width, bmp.height));
+      const w = Math.max(1, Math.round(bmp.width * ratio)), h = Math.max(1, Math.round(bmp.height * ratio));
+      const canvas = drawToCanvas(bmp._img || bmp, w, h);
+      bmp.close();
+      const newBytes = new Uint8Array(await (await canvasToBlob(canvas, 'image/jpeg', quality)).arrayBuffer());
+      if (newBytes.length >= srcBytes.length * 0.92) continue;  // keep original if gain is marginal
+      const nd = dict.clone(doc.context);
+      nd.set(PDFName.of('Width'), PDFNumber.of(w));
+      nd.set(PDFName.of('Height'), PDFNumber.of(h));
+      nd.set(PDFName.of('Length'), PDFNumber.of(newBytes.length));
+      nd.set(PDFName.of('ColorSpace'), PDFName.of('DeviceRGB'));
+      nd.set(PDFName.of('BitsPerComponent'), PDFNumber.of(8));
+      nd.set(PDFName.of('Filter'), PDFName.of('DCTDecode'));
+      nd.delete(PDFName.of('DecodeParms'));
+      nd.delete(PDFName.of('Decode'));
+      doc.context.assign(ref, PDFRawStream.of(nd, newBytes));
+      recompressed++;
+    } catch (e) { /* per-image failure: keep the original image stream untouched */ }
+    if (onProgress && scanned % 25 === 0) onProgress(scanned / objs.length);
+  }
+  return recompressed;
+}
+
+/* --- PDF compression Tier 3: rasterize pages (explicit opt-in) --- */
+async function rasterizePdf(file, quality, ctx) {
+  const pdf = await openPdfJs(file);
+  const out = await PDFLib.PDFDocument.create();
+  for (let i = 1; i <= pdf.numPages; i++) {
+    ctx.progress(`Rasterizing page ${i} of ${pdf.numPages}…`, 10 + Math.round(75 * (i - 1) / pdf.numPages));
+    const { canvas, pageWidth, pageHeight } = await renderPdfPage(pdf, i, 150 / 72);
+    const jpgBytes = new Uint8Array(await (await canvasToBlob(canvas, 'image/jpeg', quality)).arrayBuffer());
+    const img = await out.embedJpg(jpgBytes);
+    const page = out.addPage([pageWidth, pageHeight]);
+    page.drawImage(img, { x: 0, y: 0, width: pageWidth, height: pageHeight });
+  }
+  return out;
+}
+
+/* ============================ SRT parsing ============================ */
+function parseSrt(content) {
+  const entries = [];
+  const blocks = content.replace(/\r\n?/g, '\n').trim().split(/\n\s*\n/);
+  for (const block of blocks) {
+    const lines = block.trim().split('\n');
+    const tsIdx = lines.findIndex(l => l.includes('-->'));
+    if (tsIdx === -1) continue;
+    const m = lines[tsIdx].match(/(\d{2}):(\d{2}):(\d{2})[,.]\d{1,3}/);
+    if (!m) continue;
+    const h = parseInt(m[1], 10);
+    const timestamp = h > 0 ? `${h}:${m[2]}:${m[3]}` : `${m[2]}:${m[3]}`;
+    let text = lines.slice(tsIdx + 1).join(' ').replace(/<[^>]*>/g, '').trim();
+    if (!text) continue;
+    let speaker = null;
+    const sm = text.match(/^([A-Za-z][A-Za-z0-9 .'\-]{0,29}):\s+(.+)$/);
+    if (sm) { speaker = sm[1].trim(); text = sm[2].trim(); }
+    entries.push({ timestamp, speaker, text });
+  }
+  return entries;
+}
+
+/* ============================ card configs ============================ */
+const CATEGORIES = [
+  { id: 'pdf', label: 'PDF Tools', color: '#ff453a',
+    icon: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>' },
+  { id: 'image', label: 'Image Tools', color: '#bf5af2',
+    icon: '<rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>' },
+  { id: 'video', label: 'Video Tools', color: '#ff9f0a',
+    icon: '<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/>' },
+  { id: 'audio', label: 'Audio Tools', color: '#32ade6',
+    icon: '<path d="M4 10v4M8 7v10M12 5v14M16 7v10M20 10v4"/>' }
+];
+
+const BITRATES = [['128k', '128 kbps'], ['192k', '192 kbps (recommended)'], ['256k', '256 kbps'], ['320k', '320 kbps']];
+
+const CARDS = [
+/* ---------- PDF ---------- */
+{
+  id: 'pdf-images', cat: 'pdf', title: 'PDF to Images', desc: 'Each page becomes a PNG',
+  accept: '.pdf,application/pdf', actionLabel: 'Convert to Images',
+  validate: f => { if (f.type !== 'application/pdf' && !/\.pdf$/i.test(f.name)) throw new Error('Please select a PDF file.'); },
+  fileInfo: async (f, setInfo) => { const d = await loadPdfLib(await readBytes(f)); setInfo(`${d.getPageCount()} pages`); },
+  options: [
+    { type: 'radio', id: 'pages', label: 'Pages', value: 'all', choices: [['all', 'All pages'], ['specific', 'Specific pages']] },
+    { type: 'text', id: 'range', label: 'Page range', placeholder: 'e.g. 1-3, 5, 8', showIf: get => get('pages') === 'specific' }
+  ],
+  run: async ctx => {
+    const pdf = await openPdfJs(ctx.file);
+    const pages = ctx.opt('pages') === 'all'
+      ? Array.from({ length: pdf.numPages }, (_, i) => i + 1)
+      : parsePageRanges(ctx.opt('range'), pdf.numPages);
+    const base = stripExt(ctx.file.name);
+    const files = [];
+    for (let i = 0; i < pages.length; i++) {
+      ctx.progress(`Rendering page ${pages[i]}…`, 5 + Math.round(90 * i / pages.length));
+      const { canvas } = await renderPdfPage(pdf, pages[i], 2);
+      files.push({ blob: await canvasToBlob(canvas, 'image/png'), name: `${base} ${pages[i]}.png` });
+    }
+    return { files, zipName: `${base}_images.zip`, note: 'Rendered fresh from the PDF — output images contain no metadata.' };
+  }
+},
+{
+  id: 'split-pdf', cat: 'pdf', title: 'Split PDF', desc: 'Split into two documents',
+  accept: '.pdf,application/pdf', actionLabel: 'Split PDF',
+  validate: f => { if (f.type !== 'application/pdf' && !/\.pdf$/i.test(f.name)) throw new Error('Please select a PDF file.'); },
+  fileInfo: async (f, setInfo) => { const d = await loadPdfLib(await readBytes(f)); setInfo(`${d.getPageCount()} pages`); },
+  options: [{ type: 'number', id: 'splitAt', label: 'Split after page', value: 1, min: 1 }],
+  run: async ctx => {
+    const src = await loadPdfLib(await readBytes(ctx.file));
+    const total = src.getPageCount();
+    const at = parseInt(ctx.opt('splitAt'), 10);
+    if (isNaN(at) || at < 1 || at >= total) throw new Error(`Split page must be between 1 and ${total - 1} (this document has ${total} pages).`);
+    const part = async idxs => {
+      const d = await PDFLib.PDFDocument.create();
+      (await d.copyPages(src, idxs)).forEach(p => d.addPage(p));
+      return savePdf(d);
+    };
+    ctx.progress('Building part 1…', 35);
+    const b1 = await part([...Array(at).keys()]);
+    ctx.progress('Building part 2…', 70);
+    const b2 = await part([...Array(total - at).keys()].map(i => i + at));
+    const base = stripExt(ctx.file.name);
+    return {
+      files: [{ blob: b1, name: `${base} part 1.pdf` }, { blob: b2, name: `${base} part 2.pdf` }],
+      zipName: `${base}_split.zip`, note: 'Document metadata removed from both parts.'
+    };
+  }
+},
+{
+  id: 'merge-pdf', cat: 'pdf', title: 'Merge PDFs', desc: 'Combine multiple PDFs into one',
+  accept: '.pdf,application/pdf', multiple: true, actionLabel: 'Merge PDFs',
+  filter: f => f.type === 'application/pdf' || /\.pdf$/i.test(f.name),
+  run: async ctx => {
+    if (ctx.files.length < 2) throw new Error('Add at least 2 PDF files to merge.');
+    const out = await PDFLib.PDFDocument.create();
+    for (let i = 0; i < ctx.files.length; i++) {
+      ctx.progress(`Merging ${esc(ctx.files[i].name)}…`, 5 + Math.round(80 * i / ctx.files.length));
+      const d = await loadPdfLib(await readBytes(ctx.files[i]));
+      (await out.copyPages(d, d.getPageIndices())).forEach(p => out.addPage(p));
+    }
+    ctx.progress('Saving…', 90);
+    return { files: [{ blob: await savePdf(out), name: 'merged.pdf' }], note: 'Document metadata removed.' };
+  }
+},
+{
+  id: 'compress-pdf', cat: 'pdf', title: 'Compress PDF', desc: 'Reduce PDF file size',
+  accept: '.pdf,application/pdf', actionLabel: 'Compress PDF',
+  validate: f => { if (f.type !== 'application/pdf' && !/\.pdf$/i.test(f.name)) throw new Error('Please select a PDF file.'); },
+  fileInfo: async (f, setInfo) => { const d = await loadPdfLib(await readBytes(f)); setInfo(`${d.getPageCount()} pages`); },
+  options: [{
+    type: 'radio', id: 'mode', label: 'Mode', value: 'balanced', choices: [
+      ['lossless', 'Lossless — restructure only, no quality loss'],
+      ['balanced', 'Balanced — recompress embedded images, text stays sharp & selectable'],
+      ['maximum', 'Maximum — convert pages to images (smallest, text no longer selectable)']
+    ]
+  }],
+  run: async ctx => {
+    const mode = ctx.opt('mode');
+    let outDoc;
+    if (mode === 'maximum') {
+      outDoc = await rasterizePdf(ctx.file, 0.62, ctx);
+    } else {
+      ctx.progress('Reading PDF…', 8);
+      outDoc = await loadPdfLib(await readBytes(ctx.file));
+      if (mode === 'balanced') {
+        ctx.progress('Recompressing embedded images…', 20);
+        const n = await recompressPdfImages(outDoc, 0.72, 1600, r => ctx.progress('Recompressing embedded images…', 20 + Math.round(r * 60)));
+        ctx.progress(n ? `Recompressed ${n} image(s)…` : 'No compressible images found…', 82);
+      }
+    }
+    ctx.progress('Saving PDF…', 90);
+    const blob = await savePdf(outDoc);
+    if (blob.size >= ctx.file.size) {
+      return {
+        files: [{ blob: ctx.file, name: ctx.file.name }],
+        note: `Compression could not make this PDF smaller (result would be ${fmtSize(blob.size)} vs the original ${fmtSize(ctx.file.size)}), so your ORIGINAL file is returned unchanged — metadata was NOT removed.` +
+          (mode !== 'maximum' ? ' For scanned documents, try "Maximum" mode.' : '')
+      };
+    }
+    return {
+      files: [{ blob, name: `${stripExt(ctx.file.name)}_compressed.pdf` }],
+      note: `${fmtSize(ctx.file.size)} → ${fmtSize(blob.size)} (${Math.round((1 - blob.size / ctx.file.size) * 100)}% smaller). Document metadata removed.` +
+        (mode === 'maximum' ? '\nNote: pages were converted to images — text is no longer selectable.' : '')
+    };
+  }
+},
+{
+  id: 'images-pdf', cat: 'pdf', title: 'Images to PDF', desc: 'One image per page',
+  accept: 'image/*', multiple: true, actionLabel: 'Create PDF',
+  filter: f => f.type.startsWith('image/'),
+  run: async ctx => {
+    if (!ctx.files.length) throw new Error('Add at least one image.');
+    const out = await PDFLib.PDFDocument.create();
+    for (let i = 0; i < ctx.files.length; i++) {
+      const f = ctx.files[i];
+      ctx.progress(`Adding image ${i + 1} of ${ctx.files.length}…`, 5 + Math.round(80 * i / ctx.files.length));
+      let img;
+      if (f.type === 'image/jpeg') {
+        // strip EXIF once via canvas re-encode, embed as JPEG (no PNG blow-up)
+        img = await out.embedJpg(new Uint8Array(await (await stripImageMeta(f, 'image/jpeg')).arrayBuffer()));
+      } else {
+        // canvas round-trip to PNG (strips metadata; handles PNG and other decodable formats)
+        const el = await loadImage(f);
+        const png = await canvasToBlob(drawToCanvas(el, el.naturalWidth, el.naturalHeight), 'image/png');
+        img = await out.embedPng(new Uint8Array(await png.arrayBuffer()));
+      }
+      out.addPage([img.width, img.height]).drawImage(img, { x: 0, y: 0, width: img.width, height: img.height });
+    }
+    ctx.progress('Saving…', 90);
+    return { files: [{ blob: await savePdf(out), name: 'images.pdf' }], note: 'Image metadata (EXIF/GPS) removed during conversion.' };
+  }
+},
+{
+  id: 'srt-pdf', cat: 'pdf', title: 'SRT to PDF', desc: 'Formatted subtitle transcript',
+  accept: '.srt,.txt', actionLabel: 'Create PDF',
+  validate: f => { if (!/\.(srt|txt)$/i.test(f.name)) throw new Error('Please select an .srt subtitle file.'); },
+  options: [],
+  run: async ctx => {
+    const entries = parseSrt(await ctx.file.text());
+    if (!entries.length) throw new Error('No valid subtitle entries found in this file — is it a standard SRT?');
+    ctx.progress('Building PDF…', 15);
+    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+    const chunks = [];
+    doc.on('data', c => chunks.push(c));
+    let currentSpeaker = null;
+    entries.forEach((e, i) => {
+      if (doc.y > 700) doc.addPage();
+      if (e.speaker && e.speaker !== currentSpeaker) {
+        currentSpeaker = e.speaker;
+        doc.font('Helvetica-Bold').fontSize(12).text(e.speaker + ':');
+      } else if (!e.speaker) currentSpeaker = null;
+      doc.font('Helvetica').fontSize(11).text(e.timestamp);
+      doc.font('Helvetica').fontSize(11).text(e.text);
+      doc.moveDown(0.8);
+      if (i % 20 === 0) ctx.progress('Building PDF…', 15 + Math.round(55 * i / entries.length));
+    });
+    const raw = await new Promise((res, rej) => {
+      doc.on('end', () => res(new Blob(chunks, { type: 'application/pdf' })));
+      doc.on('error', rej);
+      doc.end();
+    });
+    // pdfkit stamps its own Producer info — clean it with a pdf-lib re-save
+    ctx.progress('Removing metadata…', 85);
+    const cleanDoc = await loadPdfLib(await readBytes(raw));
+    return { files: [{ blob: await savePdf(cleanDoc), name: `${stripExt(ctx.file.name)}.pdf` }], note: `${entries.length} subtitle entries. Document metadata removed.` };
+  }
+},
+
+/* ---------- Image ---------- */
+{
+  id: 'resize-image', cat: 'image', title: 'Resize Image', desc: 'Change image dimensions',
+  accept: 'image/*', actionLabel: 'Resize',
+  validate: f => { if (!f.type.startsWith('image/')) throw new Error('Please select an image file.'); },
+  fileInfo: async (f, setInfo, card) => {
+    const img = await loadImage(f);
+    state[card.id].dims = [img.naturalWidth, img.naturalHeight];
+    $('opt-resize-image-width').value = img.naturalWidth;
+    $('opt-resize-image-height').value = img.naturalHeight;
+    setInfo(`${img.naturalWidth}×${img.naturalHeight}`);
+  },
+  options: [
+    { type: 'number', id: 'width', label: 'Width (px)', value: '', min: 1, max: 20000 },
+    { type: 'number', id: 'height', label: 'Height (px)', value: '', min: 1, max: 20000 },
+    { type: 'checkbox', id: 'lock', label: 'Lock aspect ratio', value: true }
+  ],
+  wire: card => {
+    const w = $('opt-resize-image-width'), h = $('opt-resize-image-height'), lock = $('opt-resize-image-lock');
+    w.addEventListener('input', () => { const d = state[card.id].dims; if (lock.checked && d && w.value > 0) h.value = Math.max(1, Math.round(w.value * d[1] / d[0])); });
+    h.addEventListener('input', () => { const d = state[card.id].dims; if (lock.checked && d && h.value > 0) w.value = Math.max(1, Math.round(h.value * d[0] / d[1])); });
+  },
+  run: async ctx => {
+    const w = parseInt(ctx.opt('width'), 10), h = parseInt(ctx.opt('height'), 10);
+    if (!w || !h || w < 1 || h < 1 || w > 20000 || h > 20000) throw new Error('Please enter valid dimensions (1–20000 px).');
+    const type = CANVAS_TYPES.includes(ctx.file.type) ? ctx.file.type : 'image/png';
+    const img = await loadImage(ctx.file);
+    ctx.progress('Resizing…', 50);
+    const blob = await canvasToBlob(drawToCanvas(img, w, h), type, type === 'image/jpeg' ? 0.92 : undefined);
+    const ext = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[type];
+    return {
+      files: [{ blob, name: `${stripExt(ctx.file.name)}_${w}x${h}.${ext}` }],
+      note: 'Re-encoded via canvas — metadata removed.' + (type !== ctx.file.type ? ` Saved as ${ext.toUpperCase()} (original format cannot be written by the browser).` : '')
+    };
+  }
+},
+{
+  id: 'convert-image', cat: 'image', title: 'Convert Image', desc: 'PNG / JPEG / WebP',
+  accept: 'image/*', actionLabel: 'Convert',
+  validate: f => { if (!f.type.startsWith('image/')) throw new Error('Please select an image file.'); },
+  options: [{ type: 'select', id: 'format', label: 'Output format', value: 'image/png', choices: [['image/png', 'PNG'], ['image/jpeg', 'JPEG'], ['image/webp', 'WebP']] }],
+  run: async ctx => {
+    const type = ctx.opt('format');
+    const img = await loadImage(ctx.file);
+    ctx.progress('Converting…', 50);
+    const blob = await canvasToBlob(drawToCanvas(img, img.naturalWidth, img.naturalHeight), type, type === 'image/jpeg' ? 0.92 : undefined);
+    const ext = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[type];
+    return { files: [{ blob, name: `${stripExt(ctx.file.name)}.${ext}` }], note: 'Re-encoded via canvas — metadata removed.' };
+  }
+},
+{
+  id: 'compress-image', cat: 'image', title: 'Compress Image', desc: 'Reduce image file size',
+  accept: 'image/*', actionLabel: 'Compress',
+  validate: f => { if (!f.type.startsWith('image/')) throw new Error('Please select an image file.'); },
+  options: [{ type: 'range', id: 'quality', label: 'Quality', value: 75, min: 30, max: 95, suffix: '%' }],
+  run: async ctx => {
+    const q = parseInt(ctx.opt('quality'), 10) / 100;
+    const f = ctx.file;
+    const img = await loadImage(f);
+    const c = drawToCanvas(img, img.naturalWidth, img.naturalHeight);
+    let type = 'image/jpeg';
+    if (f.type === 'image/png') { // keep PNG only if transparency would be lost
+      const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+      for (let i = 3; i < d.length; i += 4) if (d[i] < 255) { type = 'image/png'; break; }
+    }
+    ctx.progress('Compressing…', 50);
+    const blob = await canvasToBlob(c, type, type === 'image/jpeg' ? q : undefined);
+    if (blob.size >= f.size) {
+      return {
+        files: [{ blob: f, name: f.name }],
+        note: `Could not make this image smaller (result would be ${fmtSize(blob.size)} vs the original ${fmtSize(f.size)})` +
+          (type === 'image/png' ? ' — PNGs with transparency cannot be quality-compressed by the browser' : '') +
+          '. Your ORIGINAL file is returned unchanged — metadata was NOT removed (use the Remove Metadata tool for that).'
+      };
+    }
+    const ext = type === 'image/png' ? 'png' : 'jpg';
+    return {
+      files: [{ blob, name: `${stripExt(f.name)}_compressed.${ext}` }],
+      note: `${fmtSize(f.size)} → ${fmtSize(blob.size)} (${Math.round((1 - blob.size / f.size) * 100)}% smaller). Metadata removed.`
+    };
+  }
+},
+{
+  id: 'remove-metadata', cat: 'image', title: 'Remove Metadata', desc: 'Strip EXIF / GPS / document info',
+  accept: '*/*', actionLabel: 'Remove Metadata', largeHint: true,
+  validate: () => {},
+  options: [],
+  run: async ctx => {
+    const f = ctx.file, t = f.type, n = f.name.toLowerCase();
+    if (t.startsWith('image/')) {
+      ctx.progress('Removing image metadata…', 30);
+      const blob = await stripImageMeta(f, t); // throws for GIF etc. — never silently converts or passes through
+      return {
+        files: [{ blob, name: `${stripExt(f.name)}_no_metadata${extOf(f.name)}` }],
+        note: `Re-encoded ${t.split('/')[1].toUpperCase()} via canvas${t === 'image/jpeg' ? ' (quality 95)' : ''} — EXIF, GPS and embedded metadata removed.`
+      };
+    }
+    if (t === 'application/pdf' || n.endsWith('.pdf')) {
+      ctx.progress('Removing PDF metadata…', 30);
+      const src = await loadPdfLib(await readBytes(f));
+      const out = await PDFLib.PDFDocument.create();
+      (await out.copyPages(src, src.getPageIndices())).forEach(p => out.addPage(p));
+      return {
+        files: [{ blob: await savePdf(out), name: `${stripExt(f.name)}_no_metadata.pdf` }],
+        note: 'Document info and metadata removed. Note: content inside pages (visible text, annotations) is preserved as-is.'
+      };
+    }
+    if (isVideoFile(f) || isAudioFile(f)) {
+      checkMediaSize(f);
+      const out = await ffmpegJob(ctx, f, (i, o) => ['-i', i, '-map_metadata', '-1', '-c', 'copy', '-y', o], extOf(f.name));
+      return {
+        files: [{ blob: new Blob([out], { type: t || 'application/octet-stream' }), name: `${stripExt(f.name)}_no_metadata${extOf(f.name)}` }],
+        note: 'All container metadata removed (audio/video streams copied without re-encoding — no quality loss).'
+      };
+    }
+    throw new Error(`Metadata removal is not supported for this file type (${t || extOf(n) || 'unknown'}). Supported: images (JPEG/PNG/WebP), PDF, video and audio files.`);
+  }
+},
+
+/* ---------- Video ---------- */
+{
+  id: 'video-audio', cat: 'video', title: 'Video to Audio', desc: 'Extract audio track',
+  accept: 'video/*', actionLabel: 'Extract Audio', largeHint: true, validate: vVideo,
+  options: [
+    { type: 'select', id: 'format', label: 'Format', value: 'mp3', choices: [['mp3', 'MP3'], ['wav', 'WAV'], ['m4a', 'M4A'], ['ogg', 'OGG']] },
+    { type: 'select', id: 'bitrate', label: 'Bitrate', value: '192k', choices: BITRATES, showIf: get => get('format') !== 'wav' }
+  ],
+  run: async ctx => {
+    const fmt = ctx.opt('format'), br = ctx.opt('bitrate') || '192k';
+    const codec = {
+      mp3: ['-acodec', 'libmp3lame', '-b:a', br],
+      wav: ['-acodec', 'pcm_s16le'],
+      m4a: ['-acodec', 'aac', '-b:a', br],
+      ogg: ['-acodec', 'libvorbis', '-b:a', br]
+    }[fmt];
+    const out = await ffmpegJob(ctx, ctx.file, (i, o) => ['-i', i, '-vn', ...codec, '-map_metadata', '-1', '-y', o], '.' + fmt);
+    const mime = { mp3: 'audio/mpeg', wav: 'audio/wav', m4a: 'audio/mp4', ogg: 'audio/ogg' }[fmt];
+    return { files: [{ blob: new Blob([out], { type: mime }), name: `${stripExt(ctx.file.name)}.${fmt}` }], note: 'Metadata removed.' };
+  }
+},
+{
+  id: 'video-mp4', cat: 'video', title: 'Convert to MP4', desc: 'Any video to MP4 (H.264)',
+  accept: 'video/*', actionLabel: 'Convert to MP4', largeHint: true, validate: vVideo,
+  options: [],
+  run: async ctx => {
+    const out = await ffmpegJob(ctx, ctx.file, (i, o) => ['-i', i, '-c:v', 'libx264', '-preset', 'medium', '-map_metadata', '-1', '-y', o], '.mp4');
+    return { files: [{ blob: new Blob([out], { type: 'video/mp4' }), name: `${stripExt(ctx.file.name)}.mp4` }], note: 'Metadata removed.' };
+  }
+},
+{
+  id: 'video-compress', cat: 'video', title: 'Compress Video', desc: 'Reduce video file size',
+  accept: 'video/*', actionLabel: 'Compress', largeHint: true, validate: vVideo,
+  options: [{ type: 'radio', id: 'crf', label: 'Level', value: '28', choices: [['23', 'Light (best quality)'], ['28', 'Medium (recommended)'], ['33', 'Strong (smallest)']] }],
+  run: async ctx => {
+    const out = await ffmpegJob(ctx, ctx.file, (i, o) => ['-i', i, '-c:v', 'libx264', '-crf', ctx.opt('crf'), '-preset', 'medium', '-map_metadata', '-1', '-y', o], '.mp4');
+    const blob = new Blob([out], { type: 'video/mp4' });
+    const pct = Math.round((1 - blob.size / ctx.file.size) * 100);
+    return {
+      files: [{ blob, name: `${stripExt(ctx.file.name)}_compressed.mp4` }],
+      note: pct > 0
+        ? `${fmtSize(ctx.file.size)} → ${fmtSize(blob.size)} (${pct}% smaller). Metadata removed.`
+        : `Output is ${fmtSize(blob.size)} — not smaller than the original (${fmtSize(ctx.file.size)}); this video is already efficiently encoded. Try the "Strong" level. Metadata removed.`
+    };
+  }
+},
+{
+  id: 'trim-video', cat: 'video', title: 'Trim Video', desc: 'Cut a clip without re-encoding',
+  accept: 'video/*', actionLabel: 'Trim', largeHint: true, validate: vVideo,
+  options: [
+    { type: 'number', id: 'start', label: 'Start (seconds)', value: 0, min: 0, step: 0.1 },
+    { type: 'number', id: 'end', label: 'End (seconds)', value: '', min: 0, step: 0.1 }
+  ],
+  run: async ctx => {
+    const start = parseFloat(ctx.opt('start')) || 0;
+    const end = parseFloat(ctx.opt('end')) || 0;
+    if (end > 0 && end <= start) throw new Error('End time must be greater than start time.');
+    const out = await ffmpegJob(ctx, ctx.file, (i, o) =>
+      ['-i', i, '-ss', String(start), ...(end > 0 ? ['-to', String(end)] : []), '-c', 'copy', '-map_metadata', '-1', '-y', o], '.mp4');
+    return {
+      files: [{ blob: new Blob([out], { type: 'video/mp4' }), name: `${stripExt(ctx.file.name)}_trimmed.mp4` }],
+      note: 'Streams copied without re-encoding (cut points snap to the nearest keyframe). Metadata removed.'
+    };
+  }
+},
+{
+  id: 'video-gif', cat: 'video', title: 'Video to GIF', desc: 'Short animated GIF clip',
+  accept: 'video/*', actionLabel: 'Create GIF', largeHint: true, validate: vVideo,
+  options: [
+    { type: 'number', id: 'start', label: 'Start (seconds)', value: 0, min: 0, step: 0.1 },
+    { type: 'number', id: 'duration', label: 'Duration (max 10 s)', value: 3, min: 0.5, max: 10, step: 0.5 },
+    { type: 'select', id: 'fps', label: 'Frame rate', value: '15', choices: [['10', '10 fps'], ['15', '15 fps'], ['20', '20 fps']] },
+    { type: 'number', id: 'width', label: 'Width (px)', value: 480, min: 100, max: 1280 }
+  ],
+  run: async ctx => {
+    const start = parseFloat(ctx.opt('start')) || 0;
+    const dur = parseFloat(ctx.opt('duration')) || 3;
+    if (dur > 10) throw new Error('GIF duration cannot exceed 10 seconds.');
+    const fps = parseInt(ctx.opt('fps'), 10) || 15;
+    const width = Math.min(1280, Math.max(100, parseInt(ctx.opt('width'), 10) || 480));
+    const out = await ffmpegJob(ctx, ctx.file, (i, o) =>
+      ['-i', i, '-ss', String(start), '-t', String(dur), '-vf', `fps=${fps},scale=${width}:-1:flags=lanczos`, '-map_metadata', '-1', '-y', o], '.gif');
+    return { files: [{ blob: new Blob([out], { type: 'image/gif' }), name: `${stripExt(ctx.file.name)}.gif` }] };
+  }
+},
+
+/* ---------- Audio ---------- */
+{
+  id: 'audio-mp3', cat: 'audio', title: 'Convert to MP3', desc: 'Any audio to MP3',
+  accept: 'audio/*', actionLabel: 'Convert to MP3', largeHint: true, validate: vAudio,
+  options: [{ type: 'select', id: 'bitrate', label: 'Bitrate', value: '192k', choices: BITRATES }],
+  run: async ctx => {
+    const out = await ffmpegJob(ctx, ctx.file, (i, o) => ['-i', i, '-vn', '-acodec', 'libmp3lame', '-b:a', ctx.opt('bitrate'), '-map_metadata', '-1', '-y', o], '.mp3');
+    return { files: [{ blob: new Blob([out], { type: 'audio/mpeg' }), name: `${stripExt(ctx.file.name)}.mp3` }], note: 'Metadata removed.' };
+  }
+},
+{
+  id: 'audio-compress', cat: 'audio', title: 'Compress Audio', desc: 'Lower bitrate MP3',
+  accept: 'audio/*', actionLabel: 'Compress', largeHint: true, validate: vAudio,
+  options: [{ type: 'select', id: 'bitrate', label: 'Bitrate', value: '128k', choices: [['96k', '96 kbps (smallest)'], ['128k', '128 kbps (recommended)'], ['192k', '192 kbps']] }],
+  run: async ctx => {
+    const out = await ffmpegJob(ctx, ctx.file, (i, o) => ['-i', i, '-vn', '-acodec', 'libmp3lame', '-b:a', ctx.opt('bitrate'), '-map_metadata', '-1', '-y', o], '.mp3');
+    const blob = new Blob([out], { type: 'audio/mpeg' });
+    const pct = Math.round((1 - blob.size / ctx.file.size) * 100);
+    return {
+      files: [{ blob, name: `${stripExt(ctx.file.name)}_compressed.mp3` }],
+      note: pct > 0
+        ? `${fmtSize(ctx.file.size)} → ${fmtSize(blob.size)} (${pct}% smaller). Metadata removed.`
+        : `Output (${fmtSize(blob.size)}) is not smaller than the original — it was already compressed at a lower bitrate. Metadata removed.`
+    };
+  }
+},
+{
+  id: 'trim-audio', cat: 'audio', title: 'Trim Audio', desc: 'Cut an audio clip',
+  accept: 'audio/*', actionLabel: 'Trim', largeHint: true, validate: vAudio,
+  options: [
+    { type: 'number', id: 'start', label: 'Start (seconds)', value: 0, min: 0, step: 0.1 },
+    { type: 'number', id: 'end', label: 'End (seconds)', value: '', min: 0, step: 0.1 }
+  ],
+  run: async ctx => {
+    const start = parseFloat(ctx.opt('start')) || 0;
+    const end = parseFloat(ctx.opt('end')) || 0;
+    if (end > 0 && end <= start) throw new Error('End time must be greater than start time.');
+    const out = await ffmpegJob(ctx, ctx.file, (i, o) =>
+      ['-i', i, '-ss', String(start), ...(end > 0 ? ['-to', String(end)] : []), '-vn', '-acodec', 'libmp3lame', '-b:a', '192k', '-map_metadata', '-1', '-y', o], '.mp3');
+    return { files: [{ blob: new Blob([out], { type: 'audio/mpeg' }), name: `${stripExt(ctx.file.name)}_trimmed.mp3` }], note: 'Metadata removed.' };
+  }
+},
+{
+  id: 'normalize-audio', cat: 'audio', title: 'Normalize Audio', desc: 'Even out loudness levels',
+  accept: 'audio/*', actionLabel: 'Normalize', largeHint: true, validate: vAudio,
+  options: [{ type: 'radio', id: 'level', label: 'Target level', value: '-16', choices: [['-16', '-16 LUFS (streaming / podcast)'], ['-23', '-23 LUFS (broadcast)']] }],
+  run: async ctx => {
+    const out = await ffmpegJob(ctx, ctx.file, (i, o) =>
+      ['-i', i, '-vn', '-af', `loudnorm=I=${ctx.opt('level')}:TP=-1.5:LRA=11`, '-acodec', 'libmp3lame', '-b:a', '192k', '-map_metadata', '-1', '-y', o], '.mp3');
+    return { files: [{ blob: new Blob([out], { type: 'audio/mpeg' }), name: `${stripExt(ctx.file.name)}_normalized.mp3` }], note: 'Loudness normalized. Metadata removed.' };
+  }
+}
+];
+
+CARDS.forEach(c => { if (!c.options) c.options = []; });
+const CARD_MAP = Object.fromEntries(CARDS.map(c => [c.id, c]));
+const state = Object.fromEntries(CARDS.map(c => [c.id, { files: [], result: null, dims: null }]));
+let openCardId = null;
+
+/* ============================ UI generation ============================ */
+function optRowHtml(card, o) {
+  const id = `opt-${card.id}-${o.id}`;
+  let ctrl;
+  switch (o.type) {
+    case 'select':
+      ctrl = `<select id="${id}">${o.choices.map(([v, l]) => `<option value="${v}"${v === o.value ? ' selected' : ''}>${l}</option>`).join('')}</select>`; break;
+    case 'number':
+      ctrl = `<input type="number" id="${id}" value="${o.value}"${o.min != null ? ` min="${o.min}"` : ''}${o.max != null ? ` max="${o.max}"` : ''} step="${o.step || 1}">`; break;
+    case 'text':
+      ctrl = `<input type="text" id="${id}" placeholder="${o.placeholder || ''}">`; break;
+    case 'range':
+      ctrl = `<input type="range" id="${id}" min="${o.min}" max="${o.max}" value="${o.value}"><span class="rv" id="${id}-v">${o.value}${o.suffix || ''}</span>`; break;
+    case 'radio':
+      ctrl = o.choices.map(([v, l]) => `<label class="rl"><input type="radio" name="${id}" value="${v}"${v === o.value ? ' checked' : ''}> ${l}</label>`).join('<br>'); break;
+    case 'checkbox':
+      ctrl = `<input type="checkbox" id="${id}"${o.value ? ' checked' : ''}>`; break;
+  }
+  return `<div class="opt-row" id="row-${id}"><label>${o.label}</label><div class="ctrl">${ctrl}</div></div>`;
+}
+
+function getOptValue(card, oid) {
+  const o = card.options.find(x => x.id === oid);
+  const id = `opt-${card.id}-${oid}`;
+  if (!o) return undefined;
+  if (o.type === 'radio') {
+    const el = document.querySelector(`input[name="${id}"]:checked`);
+    return el ? el.value : o.value;
+  }
+  const el = $(id);
+  if (!el) return o.value;
+  return o.type === 'checkbox' ? el.checked : el.value;
+}
+
+function cardHtml(card, idx) {
+  return `
+  <div class="card" id="card-${card.id}">
+    <div class="card-head" data-card="${card.id}">
+      <div class="ic">${idx}</div>
+      <div><div class="t">${card.title}</div><div class="d">${card.desc}</div></div>
+      <button class="x hidden" data-close="${card.id}" title="Close">&times;</button>
+    </div>
+    <div class="card-body hidden" id="body-${card.id}">
+      <div class="dz" id="dz-${card.id}">Drop ${card.multiple ? 'files' : 'a file'} here or click to browse
+        <input type="file" id="file-${card.id}" accept="${card.accept}"${card.multiple ? ' multiple' : ''} hidden>
+      </div>
+      <div class="hidden" id="opts-${card.id}">
+        ${card.multiple
+          ? `<div class="flist" id="flist-${card.id}"></div><button class="addmore" id="add-${card.id}">+ Add more files</button>`
+          : `<div class="fileinfo"><span id="fname-${card.id}"></span> <span class="fi-size" id="finfo-${card.id}"></span><button class="clear" id="clear-${card.id}" title="Remove file">&times;</button></div>
+             <div class="hint hidden" id="hint-${card.id}"></div>`}
+        ${card.options.map(o => optRowHtml(card, o)).join('')}
+        <button class="go" id="go-${card.id}">${card.actionLabel}</button>
+      </div>
+      <div class="prog hidden" id="prog-${card.id}">
+        <div class="pstat" id="pstat-${card.id}">Working…</div>
+        <div class="bar"><div class="fill" id="pfill-${card.id}"></div></div>
+        <div class="ppct" id="ppct-${card.id}">0%</div>
+      </div>
+      <div class="result hidden" id="res-${card.id}">
+        <div class="ok">Done</div>
+        <div class="rnote" id="rnote-${card.id}"></div>
+        <button class="go" id="dl-${card.id}">Download</button>
+        <button class="sec" id="again-${card.id}">Convert another</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function buildUI() {
+  $('cats').innerHTML = CATEGORIES.map((cat, ci) => `
+    <section class="cat" id="cat-${cat.id}" style="--cat: ${cat.color}">
+      <div class="cat-head"><span class="cat-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${cat.icon}</svg></span><h2>${cat.label}</h2><span class="key">${ci + 1}</span></div>
+      <div class="cards">${CARDS.filter(c => c.cat === cat.id).map((c, i) => cardHtml(c, i + 1)).join('')}</div>
+    </section>`).join('');
+  CARDS.forEach(wireCard);
+}
+
+/* ============================ card behavior ============================ */
+function showPanel(cardId, panel) {
+  for (const p of ['dz', 'opts', 'prog', 'res'])
+    $(`${p === 'dz' ? 'dz' : p}-${cardId}`).classList.toggle('hidden', p !== panel);
+}
+
+function applyShowIf(card) {
+  for (const o of card.options) {
+    if (!o.showIf) continue;
+    $(`row-opt-${card.id}-${o.id}`).classList.toggle('hidden', !o.showIf(oid => getOptValue(card, oid)));
+  }
+}
+
+function resetCard(card) {
+  const st = state[card.id];
+  st.files = []; st.result = null; st.dims = null;
+  $(`file-${card.id}`).value = '';
+  if (card.multiple) $(`flist-${card.id}`).innerHTML = '';
+  showPanel(card.id, 'dz');
+}
+
+function openCard(cardId) {
+  if (openCardId === cardId) return;
+  if (openCardId) closeCard(openCardId);
+  openCardId = cardId;
+  const c = $(`card-${cardId}`);
+  c.classList.add('open');
+  $(`body-${cardId}`).classList.remove('hidden');
+  c.querySelector('.x').classList.remove('hidden');
+  c.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function closeCard(cardId) {
+  const c = $(`card-${cardId}`);
+  if (!c) return;
+  c.classList.remove('open');
+  $(`body-${cardId}`).classList.add('hidden');
+  c.querySelector('.x').classList.add('hidden');
+  resetCard(CARD_MAP[cardId]);
+  if (openCardId === cardId) openCardId = null;
+}
+
+function renderFileList(card) {
+  const st = state[card.id];
+  const list = $(`flist-${card.id}`);
+  list.innerHTML = st.files.map((f, i) =>
+    `<div class="fitem"><span>${esc(f.name)}</span><span class="sz">${fmtSize(f.size)}</span><button data-i="${i}" title="Remove">&times;</button></div>`).join('');
+  list.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
+    st.files.splice(parseInt(btn.dataset.i, 10), 1);
+    if (st.files.length) renderFileList(card);
+    else showPanel(card.id, 'dz');
+  }));
+}
+
+async function acceptFiles(card, fileList) {
+  const files = Array.from(fileList);
+  if (!files.length) return;
+  const st = state[card.id];
+  try {
+    if (card.multiple) {
+      const ok = files.filter(card.filter);
+      if (files.length - ok.length > 0) showError(`${files.length - ok.length} file(s) skipped — not supported by this tool.`);
+      if (!ok.length) return;
+      st.files.push(...ok);
+      renderFileList(card);
+    } else {
+      const f = files[0];
+      if (card.validate) card.validate(f);
+      st.files = [f];
+      $(`fname-${card.id}`).textContent = f.name;
+      $(`finfo-${card.id}`).textContent = `(${fmtSize(f.size)})`;
+      const hint = $(`hint-${card.id}`);
+      if (hint) {
+        const big = card.largeHint && f.size > 200 * 1048576;
+        hint.classList.toggle('hidden', !big);
+        if (big) hint.textContent = `Large file (${fmtSize(f.size)}) — processing may take several minutes.`;
+      }
+      if (card.fileInfo) await card.fileInfo(f, txt => { $(`finfo-${card.id}`).textContent = `(${fmtSize(f.size)} · ${txt})`; }, card);
+    }
+    showPanel(card.id, 'opts');
+    applyShowIf(card);
+  } catch (e) {
+    resetCard(card);
+    showError(e.message || String(e));
+  }
+}
+
+async function runCard(card) {
+  const st = state[card.id];
+  if (!st.files.length) return;
+  showPanel(card.id, 'prog');
+  const ctx = {
+    file: st.files[0],
+    files: st.files,
+    opt: oid => getOptValue(card, oid),
+    progress: (phase, pct) => {
+      $(`pstat-${card.id}`).textContent = phase;
+      $(`pfill-${card.id}`).style.width = Math.min(100, pct) + '%';
+      $(`ppct-${card.id}`).textContent = Math.round(Math.min(100, pct)) + '%';
+    }
+  };
+  try {
+    ctx.progress('Starting…', 2);
+    const result = await card.run(ctx);
+    ctx.progress('Complete', 100);
+    st.result = result;
+    const head = result.files.length === 1
+      ? `${result.files[0].name} (${fmtSize(result.files[0].blob.size)})`
+      : `${result.files.length} files ready — will download as one ZIP`;
+    $(`rnote-${card.id}`).textContent = head + (result.note ? '\n' + result.note : '');
+    $(`dl-${card.id}`).textContent = result.files.length === 1 ? 'Download' : `Download ZIP (${result.files.length} files)`;
+    showPanel(card.id, 'res');
+  } catch (e) {
+    showPanel(card.id, 'opts');
+    showError(e.message || String(e));
+  }
+}
+
+async function downloadResult(card) {
+  const r = state[card.id].result;
+  if (!r) return;
+  try {
+    if (r.files.length === 1) downloadBlob(r.files[0].blob, r.files[0].name);
+    else downloadBlob(await zipFiles(r.files), r.zipName || 'mediaprivacy_output.zip');
+  } catch (e) { showError('Download failed: ' + (e.message || e)); }
+}
+
+function wireCard(card) {
+  const id = card.id;
+  const input = $(`file-${id}`);
+  const dz = $(`dz-${id}`);
+
+  $(`card-${id}`).querySelector('.card-head').addEventListener('click', e => {
+    if (e.target.dataset.close) { e.stopPropagation(); closeCard(id); return; }
+    openCard(id);
+  });
+
+  dz.addEventListener('click', () => input.click());
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); e.stopPropagation();
+    dz.classList.remove('over');
+    acceptFiles(card, e.dataTransfer.files);
+  });
+  input.addEventListener('change', () => { acceptFiles(card, input.files); input.value = ''; });
+
+  const opts = $(`opts-${id}`);
+  opts.addEventListener('change', () => applyShowIf(card));
+  opts.addEventListener('input', e => {
+    if (e.target.type === 'range') {
+      const o = card.options.find(x => `opt-${id}-${x.id}` === e.target.id);
+      $(`${e.target.id}-v`).textContent = e.target.value + ((o && o.suffix) || '');
+    }
+  });
+
+  $(`go-${id}`).addEventListener('click', () => runCard(card));
+  $(`dl-${id}`).addEventListener('click', () => downloadResult(card));
+  $(`again-${id}`).addEventListener('click', () => resetCard(card));
+  if (!card.multiple) $(`clear-${id}`).addEventListener('click', () => resetCard(card));
+  if (card.multiple) $(`add-${id}`).addEventListener('click', () => input.click());
+  if (card.wire) card.wire(card);
+}
+
+/* ============================ global drop + keyboard ============================ */
+function setupGlobal() {
+  document.body.addEventListener('dragover', e => e.preventDefault());
+  document.body.addEventListener('drop', e => {
+    e.preventDefault();
+    if (e.target.closest('.dz')) return; // card dropzone handles it
+    const files = Array.from(e.dataTransfer.files);
+    if (!files.length) return;
+    const f = files[0];
+    let target = null;
+    if (isVideoFile(f)) target = 'video-audio';
+    else if (f.type === 'application/pdf' || /\.pdf$/i.test(f.name)) target = files.length > 1 ? 'merge-pdf' : 'pdf-images';
+    else if (f.type.startsWith('image/')) target = files.length > 1 ? 'images-pdf' : 'compress-image';
+    else if (isAudioFile(f)) target = 'audio-mp3';
+    if (!target) { showError(`Unsupported file type (${f.type || extOf(f.name) || 'unknown'}). Open a specific tool to see what it accepts.`); return; }
+    openCard(target);
+    acceptFiles(CARD_MAP[target], files);
+  });
+
+  document.addEventListener('keydown', e => {
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) || e.target.isContentEditable) return;
+    if (e.key === 'Escape' && openCardId) { closeCard(openCardId); return; }
+    if (/^[1-4]$/.test(e.key)) {
+      const cat = $(`cat-${CATEGORIES[parseInt(e.key, 10) - 1].id}`);
+      if (cat) cat.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  });
+}
+
+/* ============================ init ============================ */
+document.addEventListener('DOMContentLoaded', () => {
+  if (typeof pdfjsLib !== 'undefined')
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.9.359/pdf.worker.min.js';
+  buildUI();
+  setupGlobal();
+});
+</script>
+</body>
+</html>
