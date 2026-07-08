@@ -8,6 +8,7 @@
      'wasm-unsafe-eval'/'unsafe-eval' is required by ffmpeg.wasm; blob: workers are used by pdf.js and ffmpeg.wasm. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com; worker-src blob:; frame-src 'self' blob:; connect-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com blob: data:; img-src 'self' blob: data:; style-src 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>MediaPrivacy</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2 L28 7 V15 C28 23 23 28.5 16 30 C9 28.5 4 23 4 15 V7 Z' fill='%23007aff'/%3E%3Cpath d='M10.5 16 L14.5 20 L21.5 12' stroke='%23fff' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 
 <script src="https://cdn.jsdelivr.net/npm/@flemist/ffmpeg.wasm-st@0.10.1/dist/ffmpeg.min.js" integrity="sha384-R/qIPyKo5wtXabTfcEHyW/CyuR46Hws70HZBh+xtZXyGR2PKnBUWnuZ2ED9jlVse" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.9.359/pdf.min.js" integrity="sha384-M6SriHuTE+NacRvOJzawYQ1EwiClMxJ2lqRm24xwsKjUjREpyB7KJE6ezX1eXz8w" crossorigin="anonymous"></script>
@@ -660,12 +661,20 @@ function extractEmlContent(part, depth, out) {
 function buildEmailXhtml(root, content) {
   const doc = new DOMParser().parseFromString(content.html, 'text/html');
   let blockedImgs = 0;
+  // Strip remote url(...) references from CSS — email "button images" and tracking
+  // backgrounds load via CSS, not just <img src>. data: URIs stay.
+  const scrubCss = css => String(css)
+    .replace(/@import[^;]*;?/gi, '')
+    .replace(/url\(\s*(['"]?)(?!\s*data:)[^)]*?\1\s*\)/gi, () => { blockedImgs++; return 'none'; });
   doc.querySelectorAll('script, iframe, frame, object, embed, meta, base, form, input, button, select, textarea, audio, video, link').forEach(el => el.remove());
+  doc.querySelectorAll('style').forEach(el => { el.textContent = scrubCss(el.textContent); });
   doc.querySelectorAll('*').forEach(el => {
     for (const a of [...el.attributes]) {
       const n = a.name.toLowerCase(), v = a.value;
       if (n.startsWith('on')) { el.removeAttribute(a.name); continue; }
       if (n === 'href' && /^\s*javascript:/i.test(v)) { el.removeAttribute(a.name); continue; }
+      if (n === 'style' && /url\(/i.test(v)) { el.setAttribute('style', scrubCss(v)); continue; }
+      if (n === 'srcset' || n === 'poster') { el.removeAttribute(a.name); continue; }
       if (n === 'src' || n === 'background') {
         const key = v.trim().toLowerCase();
         if (key.startsWith('cid:') && content.inline[key]) el.setAttribute(a.name, content.inline[key]);
