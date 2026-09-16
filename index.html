@@ -179,6 +179,13 @@ footer b { color: var(--text-2); font-weight: 590; }
 .opt-row .rl { margin-right: 4px; color: var(--text); cursor: pointer; display: inline-block; padding: 2px 0; }
 .opt-row input[type=radio], .opt-row input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; vertical-align: -2px; }
 .hint { color: var(--text-2); font-size: 0.78rem; margin: -4px 0 12px; }
+.tracks { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.tracks .tk { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--fill); border-radius: 9px; font-size: 0.85rem; cursor: pointer; }
+.tracks .tk .tn { font-weight: 590; }
+.tracks .tk .ti { color: var(--text-2); font-size: 0.76rem; margin-left: auto; text-align: right; }
+.tracks .tsel { display: flex; gap: 12px; font-size: 0.78rem; margin-top: 2px; }
+.tracks .tsel a { color: var(--accent); cursor: pointer; text-decoration: none; }
+.tracks .tsel a:hover { text-decoration: underline; }
 
 button.go {
   background: linear-gradient(180deg, color-mix(in srgb, var(--cat, var(--accent)) 88%, #ffffff), var(--cat, var(--accent)));
@@ -280,7 +287,7 @@ async function zipFiles(files) {
 
 const MAX_MEDIA = 500 * 1048576;
 const isVideoFile = f => f.type.startsWith('video/') || /\.(mp4|mov|avi|mkv|webm|m4v|wmv|flv|3gp|ogv)$/i.test(f.name);
-const isAudioFile = f => f.type.startsWith('audio/') || /\.(mp3|wav|m4a|ogg|aac|flac|wma|opus)$/i.test(f.name);
+const isAudioFile = f => f.type.startsWith('audio/') || /\.(mp3|wav|m4a|ogg|aac|flac|wma|opus|mka)$/i.test(f.name);
 function checkMediaSize(f) {
   if (f.size > MAX_MEDIA) throw new Error(`File is too large (${fmtSize(f.size)}). In-browser conversion is limited to 500 MB by browser memory constraints.`);
 }
@@ -312,6 +319,7 @@ self.createFFmpegCore = opts => realCore(Object.assign({}, opts, {
   mainScriptUrlOrBlob: '${FFMPEG_CORE}'
 }));
 let ffmpeg = null;
+let logBuf = null; // when an array, ffmpeg's stderr lines are collected here (probe mode)
 self.onmessage = async (e) => {
   const msg = e.data;
   try {
@@ -319,27 +327,43 @@ self.onmessage = async (e) => {
       if (!ffmpeg) {
         const factory = self.createFFmpeg || (self.FFmpeg && self.FFmpeg.createFFmpeg);
         if (typeof factory !== 'function') throw new Error('The FFmpeg library failed to load from the CDN — check your connection and refresh the page.');
-        ffmpeg = factory({ log: false, corePath: '${FFMPEG_CORE}' });
+        ffmpeg = factory({ log: false, corePath: '${FFMPEG_CORE}', logger: ({ message }) => { if (logBuf && message) logBuf.push(String(message)); } });
         await ffmpeg.load();
       }
       self.postMessage({ id: msg.id, type: 'done' });
       return;
     }
+    if (msg.type === 'probe') {
+      // "ffmpeg -i file" with no output exits non-zero but prints the full stream listing to stderr.
+      ffmpeg.FS('writeFile', msg.inName, new Uint8Array(msg.bytes));
+      logBuf = [];
+      try { await ffmpeg.run('-hide_banner', '-i', msg.inName); } catch (err) {}
+      const lines = logBuf; logBuf = null;
+      try { ffmpeg.FS('unlink', msg.inName); } catch (err) {}
+      self.postMessage({ id: msg.id, type: 'done', lines });
+      return;
+    }
     if (msg.type === 'run') {
+      const outNames = msg.outNames || [msg.outName];
       ffmpeg.FS('writeFile', msg.inName, new Uint8Array(msg.bytes));
       ffmpeg.setProgress(({ ratio }) => {
         if (ratio >= 0 && ratio <= 1) self.postMessage({ id: msg.id, type: 'progress', ratio });
       });
       try {
         await ffmpeg.run(...msg.args);
-        let out;
-        try { out = ffmpeg.FS('readFile', msg.outName); }
-        catch (err) { throw new Error('FFmpeg produced no output — the file may be corrupt or use an unsupported codec.'); }
-        if (!out || !out.length) throw new Error('FFmpeg produced an empty output file.');
-        self.postMessage({ id: msg.id, type: 'done', bytes: out.buffer }, [out.buffer]);
+        const outs = [];
+        for (const n of outNames) {
+          let out;
+          try { out = ffmpeg.FS('readFile', n); }
+          catch (err) { throw new Error('FFmpeg produced no output — the file may be corrupt or use an unsupported codec.'); }
+          if (!out || !out.length) throw new Error('FFmpeg produced an empty output file.');
+          outs.push(out.buffer);
+        }
+        if (msg.outNames) self.postMessage({ id: msg.id, type: 'done', bytesList: outs }, outs);
+        else self.postMessage({ id: msg.id, type: 'done', bytes: outs[0] }, outs);
       } finally {
         try { ffmpeg.setProgress(() => {}); } catch (err) {}
-        for (const n of [msg.inName, msg.outName]) { try { ffmpeg.FS('unlink', n); } catch (err) {} }
+        for (const n of [msg.inName, ...outNames]) { try { ffmpeg.FS('unlink', n); } catch (err) {} }
       }
     }
   } catch (err) {
@@ -360,6 +384,8 @@ const FF = {
       if (m.type === 'progress') { if (p.onRatio) p.onRatio(m.ratio); return; }
       this.pending.delete(m.id);
       if (m.type === 'error') p.reject(new Error(m.message));
+      else if (m.bytesList) p.resolve(m.bytesList.map(b => new Uint8Array(b)));
+      else if (m.lines) p.resolve(m.lines);
       else p.resolve(m.bytes ? new Uint8Array(m.bytes) : null);
     };
     this.worker.onerror = e => {
@@ -399,8 +425,67 @@ const FF = {
     } finally {
       this.busy = false;
     }
+  },
+  // Same as run() but the job writes several outputs; resolves to an array of Uint8Array in outExts order.
+  async runMulti(inputExt, inputBytes, buildArgs, outExts, onRatio) {
+    if (this.busy) throw new Error('Another conversion is already running — please wait for it to finish.');
+    this.busy = true;
+    try {
+      const n = ++this.msgCounter;
+      const inName = `in${n}${inputExt || '.bin'}`;
+      const outNames = outExts.map((ext, k) => `out${n}_${k}${ext}`);
+      return await this.call(
+        { type: 'run', inName, outNames, args: buildArgs(inName, outNames), bytes: inputBytes.buffer },
+        onRatio, [inputBytes.buffer]);
+    } finally {
+      this.busy = false;
+    }
+  },
+  // Returns ffmpeg's stderr lines for "-i file" (stream listing); nothing is encoded.
+  async probe(inputExt, inputBytes) {
+    if (this.busy) throw new Error('Another conversion is already running — please wait for it to finish.');
+    this.busy = true;
+    try {
+      const n = ++this.msgCounter;
+      return await this.call({ type: 'probe', inName: `in${n}${inputExt || '.bin'}`, bytes: inputBytes.buffer }, null, [inputBytes.buffer]);
+    } finally {
+      this.busy = false;
+    }
   }
 };
+
+/* Parse ffmpeg's "-i" stream listing into audio track descriptors.
+   Example lines:
+     Stream #0:1(eng): Audio: flac, 48000 Hz, stereo, s32 (24 bit) (default)
+     Metadata:
+       title           : Interview mic
+   Returns [{ idx, aIdx, lang, title, codec, rate, layout, dflt }] where aIdx is the position among audio streams. */
+function parseAudioStreams(lines) {
+  const tracks = [];
+  let cur = null, inMeta = false, aIdx = 0;
+  for (const raw of lines) {
+    const m = raw.match(/^\s*Stream #0:(\d+)(?:\[0x[0-9a-fA-F]+\])?(?:\((\w+)\))?: (\w+): (.*)$/);
+    if (m) {
+      inMeta = false;
+      if (m[3] !== 'Audio') { cur = null; continue; }
+      const parts = m[4].split(',').map(x => x.trim());
+      const codec = (parts[0] || '').replace(/\s*\(.*$/, '');
+      const rate = (parts.find(x => /\d+ Hz/.test(x)) || '').replace(/^(\d+) Hz.*$/, '$1');
+      const layout = parts[2] || '';
+      cur = { idx: parseInt(m[1], 10), aIdx: aIdx++, lang: m[2] && m[2] !== 'und' ? m[2] : '', title: '', codec, rate, layout, dflt: /\(default\)/.test(m[4]) };
+      tracks.push(cur);
+      continue;
+    }
+    if (!cur) continue;
+    if (/^\s+Metadata:\s*$/.test(raw)) { inMeta = true; continue; }
+    if (inMeta) {
+      const km = raw.match(/^\s+(\w+)\s*:\s*(.*)$/);
+      if (!km) { inMeta = false; continue; }
+      if (km[1].toLowerCase() === 'title' && !cur.title) cur.title = km[2].trim();
+    }
+  }
+  return tracks;
+}
 
 async function ffmpegJob(ctx, file, buildArgs, outputExt, maxPct = 90) {
   if (!FF.loaded) { ctx.progress('Loading FFmpeg engine (~25 MB, one-time download)…', 5); await FF.load(); }
@@ -1294,6 +1379,66 @@ const CARDS = [
       ['-i', i, '-vn', '-af', `loudnorm=I=${ctx.opt('level')}:TP=-1.5:LRA=11`, '-acodec', 'libmp3lame', '-b:a', '192k', '-map_metadata', '-1', '-y', o], '.mp3');
     return { files: [{ blob: new Blob([out], { type: 'audio/mpeg' }), name: `${stripExt(ctx.file.name)}_normalized.mp3` }], note: 'Loudness normalized. Metadata removed.' };
   }
+},
+{
+  id: 'split-tracks', cat: 'audio', title: 'Split Audio Tracks', desc: 'MKA / MKV → one WAV per track',
+  accept: '.mka,.mkv,.webm,.mp4,.mov,.m4a,audio/*,video/*', actionLabel: 'Extract Tracks', largeHint: true, validate: vAudio,
+  options: [
+    { type: 'custom', id: 'tracks', label: 'Tracks', cls: 'tracks' },
+    { type: 'select', id: 'depth', label: 'WAV bit depth', value: 's16', choices: [['s16', '16-bit PCM'], ['s24', '24-bit PCM'], ['f32', '32-bit float']] }
+  ],
+  // Runs right after a file is picked: probe the container and render one checkbox per audio track.
+  fileInfo: async (f, setInfo, card) => {
+    const box = $(`opt-${card.id}-tracks`);
+    box.innerHTML = '<span class="hint" style="margin:0">Reading tracks…</span>';
+    const st = state[card.id];
+    st.tracks = null;
+    if (!FF.loaded) { setInfo('loading FFmpeg…'); await FF.load(); }
+    const lines = await FF.probe(extOf(f.name), await readBytes(f));
+    const tracks = parseAudioStreams(lines);
+    if (!tracks.length) throw new Error('No audio tracks found in this file — it may be corrupt or use an unsupported container.');
+    st.tracks = tracks;
+    setInfo(`${tracks.length} audio track${tracks.length === 1 ? '' : 's'}`);
+    box.innerHTML = tracks.map((t, i) => {
+      const name = t.title || (t.lang ? `Track ${i + 1} (${t.lang})` : `Track ${i + 1}`);
+      const info = [t.codec, t.rate ? t.rate + ' Hz' : '', t.layout].filter(Boolean).join(' · ');
+      return `<label class="tk"><input type="checkbox" data-track="${i}" checked><span class="tn">${esc(name)}</span><span class="ti">${esc(info)}</span></label>`;
+    }).join('') + (tracks.length > 1
+      ? `<div class="tsel"><a data-sel="all">Select all</a><a data-sel="none">Select none</a></div>` : '');
+    box.querySelectorAll('[data-sel]').forEach(a => a.addEventListener('click', () => {
+      box.querySelectorAll('input[data-track]').forEach(cb => { cb.checked = a.dataset.sel === 'all'; });
+    }));
+  },
+  run: async ctx => {
+    const st = state['split-tracks'];
+    const tracks = st.tracks || [];
+    const picked = Array.from($('opt-split-tracks-tracks').querySelectorAll('input[data-track]:checked'))
+      .map(cb => tracks[parseInt(cb.dataset.track, 10)]).filter(Boolean);
+    if (!picked.length) throw new Error('Select at least one track to extract.');
+    const codec = { s16: 'pcm_s16le', s24: 'pcm_s24le', f32: 'pcm_f32le' }[ctx.opt('depth')] || 'pcm_s16le';
+    const base = stripExt(ctx.file.name);
+    const safe = s => s.replace(/[^\w.-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40);
+    const names = picked.map(t => {
+      const n = String(t.aIdx + 1).padStart(2, '0');
+      const tag = safe(t.title) || t.lang;
+      return `${base}_track${n}${tag ? '_' + tag : ''}.wav`;
+    });
+    if (!FF.loaded) { ctx.progress('Loading FFmpeg engine (~25 MB, one-time download)…', 5); await FF.load(); }
+    ctx.progress('Reading file…', 12);
+    const bytes = await readBytes(ctx.file);
+    ctx.progress('Extracting tracks…', 15);
+    const outs = await FF.runMulti(extOf(ctx.file.name), bytes, (i, o) => {
+      const args = ['-i', i];
+      picked.forEach((t, k) => args.push('-map', `0:${t.idx}`, '-vn', '-acodec', codec, '-map_metadata', '-1', '-y', o[k]));
+      return args;
+    }, picked.map(() => '.wav'),
+      r => ctx.progress('Extracting tracks…', Math.min(90, 15 + Math.round(r * 75))));
+    return {
+      files: outs.map((u8, k) => ({ blob: new Blob([u8], { type: 'audio/wav' }), name: names[k] })),
+      zipName: `${base}_tracks.zip`,
+      note: `${picked.length} of ${tracks.length} track${tracks.length === 1 ? '' : 's'} extracted as ${{ s16: '16-bit', s24: '24-bit', f32: '32-bit float' }[ctx.opt('depth')] || '16-bit'} WAV (original sample rate kept). Metadata removed.`
+    };
+  }
 }
 ];
 
@@ -1319,8 +1464,10 @@ function optRowHtml(card, o) {
       ctrl = o.choices.map(([v, l]) => `<label class="rl"><input type="radio" name="${id}" value="${v}"${v === o.value ? ' checked' : ''}> ${l}</label>`).join('<br>'); break;
     case 'checkbox':
       ctrl = `<input type="checkbox" id="${id}"${o.value ? ' checked' : ''}>`; break;
+    case 'custom':
+      ctrl = `<div id="${id}" class="${o.cls || ''}"></div>`; break;
   }
-  return `<div class="opt-row" id="row-${id}"><label>${o.label}</label><div class="ctrl">${ctrl}</div></div>`;
+  return `<div class="opt-row" id="row-${id}"${o.type === 'custom' ? ' style="align-items:flex-start"' : ''}><label>${o.label}</label><div class="ctrl"${o.type === 'custom' ? ' style="flex:1;min-width:0"' : ''}>${ctrl}</div></div>`;
 }
 
 function getOptValue(card, oid) {
@@ -1395,7 +1542,7 @@ function applyShowIf(card) {
 
 function resetCard(card) {
   const st = state[card.id];
-  st.files = []; st.result = null; st.dims = null;
+  st.files = []; st.result = null; st.dims = null; st.tracks = null;
   $(`file-${card.id}`).value = '';
   if (card.multiple) $(`flist-${card.id}`).innerHTML = '';
   showPanel(card.id, 'dz');
@@ -1558,6 +1705,7 @@ function setupGlobal() {
     else if (/\.eml$/i.test(f.name) || f.type === 'message/rfc822') target = 'eml-pdf';
     else if (f.type === 'application/pdf' || /\.pdf$/i.test(f.name)) target = files.length > 1 ? 'merge-pdf' : 'pdf-images';
     else if (f.type.startsWith('image/')) target = files.length > 1 ? 'images-pdf' : 'compress-image';
+    else if (/\.mka$/i.test(f.name)) target = 'split-tracks';
     else if (isAudioFile(f)) target = 'audio-mp3';
     if (!target) { showError(`Unsupported file type (${f.type || extOf(f.name) || 'unknown'}). Open a specific tool to see what it accepts.`); return; }
     openCard(target);
