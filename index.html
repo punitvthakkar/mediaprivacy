@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- Material Next: speculative design forecast (frozen 2026-09-24). Not an official Google design. -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -7,226 +8,286 @@
      'unsafe-inline' is required because all app JS/CSS is inline in this single file;
      'wasm-unsafe-eval'/'unsafe-eval' is required by ffmpeg.wasm; blob: workers are used by pdf.js and ffmpeg.wasm. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com; worker-src blob:; frame-src 'self' blob:; connect-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com blob: data:; img-src 'self' blob: data:; style-src 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="theme-color" content="#F4FBF8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1513" media="(prefers-color-scheme: dark)">
 <title>MediaPrivacy</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2 L28 7 V15 C28 23 23 28.5 16 30 C9 28.5 4 23 4 15 V7 Z' fill='%23007aff'/%3E%3Cpath d='M10.5 16 L14.5 20 L21.5 12' stroke='%23fff' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2 L28 7 V15 C28 23 23 28.5 16 30 C9 28.5 4 23 4 15 V7 Z' fill='%23006B5E'/%3E%3Cpath d='M10.5 16 L14.5 20 L21.5 12' stroke='%23fff' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 
-<script src="https://cdn.jsdelivr.net/npm/@flemist/ffmpeg.wasm-st@0.10.1/dist/ffmpeg.min.js" integrity="sha384-R/qIPyKo5wtXabTfcEHyW/CyuR46Hws70HZBh+xtZXyGR2PKnBUWnuZ2ED9jlVse" crossorigin="anonymous"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.9.359/pdf.min.js" integrity="sha384-M6SriHuTE+NacRvOJzawYQ1EwiClMxJ2lqRm24xwsKjUjREpyB7KJE6ezX1eXz8w" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js" integrity="sha384-weMABwrltA6jWR8DDe9Jp5blk+tZQh7ugpCsF3JwSA53WZM9/14PjS5LAJNHNjAI" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/pdfkit@0.11.0/js/pdfkit.standalone.js" integrity="sha384-+1TYy4h30Fs7Ni8K4zNoYAhJm2LGRcZxYJ3xWpQt4g9PbFQbnhd7yrDOGnhF6CvS" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/fflate@0.8.2/umd/index.js" integrity="sha384-DT0Ls0mO7JmjTnT+oBuMhEJzYJO1zUqzuuMXNdnOmOQRIpN2BgSjvBV/j50NngIT" crossorigin="anonymous"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" integrity="sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H" crossorigin="anonymous"></script>
+<!-- Deferred so the UI paints immediately; tools await libsReady before touching them.
+     (ffmpeg.wasm is loaded inside its Web Worker, not on the page.) -->
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.9.359/pdf.min.js" integrity="sha384-M6SriHuTE+NacRvOJzawYQ1EwiClMxJ2lqRm24xwsKjUjREpyB7KJE6ezX1eXz8w" crossorigin="anonymous"></script>
+<script defer src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js" integrity="sha384-weMABwrltA6jWR8DDe9Jp5blk+tZQh7ugpCsF3JwSA53WZM9/14PjS5LAJNHNjAI" crossorigin="anonymous"></script>
+<script defer src="https://unpkg.com/pdfkit@0.11.0/js/pdfkit.standalone.js" integrity="sha384-+1TYy4h30Fs7Ni8K4zNoYAhJm2LGRcZxYJ3xWpQt4g9PbFQbnhd7yrDOGnhF6CvS" crossorigin="anonymous"></script>
+<script defer src="https://unpkg.com/fflate@0.8.2/umd/index.js" integrity="sha384-DT0Ls0mO7JmjTnT+oBuMhEJzYJO1zUqzuuMXNdnOmOQRIpN2BgSjvBV/j50NngIT" crossorigin="anonymous"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" integrity="sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H" crossorigin="anonymous"></script>
 
 <style>
-/* macOS Tahoe (Liquid Glass) theme — follows system light/dark */
+/* Material Next: speculative design forecast (frozen 2026-09-24). Not an official Google design.
+   Color roles from material-next/scripts/generate-next.mjs, standard dial (tonal-spot), app seed #00796B.
+   Each category region re-seeds its primary roles (forecast F2): PDF #C62828, Image #2E7D32,
+   Video #E8A33D, Audio #0277BD. Surfaces and chrome keep the app scheme. */
 :root {
   color-scheme: light dark;
-  --bg: #f2f2f7;
-  --glow-1: rgba(255, 90, 60, 0.13);
-  --glow-2: rgba(191, 90, 242, 0.11);
-  --glow-3: rgba(50, 173, 230, 0.13);
-  --glow-4: rgba(255, 159, 10, 0.10);
-  --panel: rgba(255, 255, 255, 0.68);
-  --panel-solid: #ffffff;
-  --hairline: rgba(0, 0, 0, 0.10);
-  --hairline-soft: rgba(0, 0, 0, 0.06);
-  --text: #1d1d1f;
-  --text-2: #6e6e73;
-  --text-3: #aeaeb2;
-  --accent: #007aff;
-  --accent-press: #0069d9;
-  --on-accent: #ffffff;
-  --fill: rgba(120, 120, 128, 0.12);
-  --fill-2: rgba(120, 120, 128, 0.20);
-  --green: #34c759;
-  --err-bg: rgba(255, 245, 245, 0.85);
-  --err-border: rgba(255, 59, 48, 0.35);
-  --err-text: #d70015;
-  --shadow: 0 0.5px 1px rgba(0,0,0,0.05), 0 10px 30px rgba(0,0,0,0.08);
-  --shadow-lg: 0 0.5px 1px rgba(0,0,0,0.06), 0 18px 50px rgba(0,0,0,0.14);
+  --font: 'Google Sans Flex', 'Roboto Flex', Roboto, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  /* Springs (forecast E5), standard dial, precomputed as linear() */
+  --mn-motion-spatial-fast-duration: 224ms;
+  --mn-motion-spatial-fast-easing: linear(0, 0.0194, 0.0684, 0.1359, 0.2138, 0.2958, 0.3777, 0.4566, 0.5304, 0.5982, 0.6593, 0.7137, 0.7614, 0.8028, 0.8384, 0.8687, 0.8942, 0.9156, 0.9333, 0.9479, 0.9599, 0.9695, 0.9772, 0.9833, 0.9881, 0.9919, 0.9947, 0.9969, 0.9984, 0.9996, 1.0004, 1.0009, 1.0013, 1.0014, 1.0015, 1.0015, 1.0015, 1.0014, 1.0012, 1.0011, 1);
+  --mn-motion-spatial-default-duration: 317ms;
+  --mn-motion-spatial-default-easing: linear(0, 0.0194, 0.0685, 0.1361, 0.214, 0.2961, 0.378, 0.4569, 0.5308, 0.5986, 0.6597, 0.7141, 0.7617, 0.8031, 0.8387, 0.8689, 0.8945, 0.9158, 0.9335, 0.9481, 0.96, 0.9696, 0.9773, 0.9834, 0.9882, 0.9919, 0.9948, 0.9969, 0.9985, 0.9996, 1.0004, 1.0009, 1.0013, 1.0014, 1.0015, 1.0015, 1.0015, 1.0014, 1.0012, 1.0011, 1);
+  --mn-motion-effects-default-duration: 231ms;
+  --mn-motion-effects-default-easing: linear(0, 0.0229, 0.0789, 0.1534, 0.2363, 0.3211, 0.4033, 0.4805, 0.5513, 0.615, 0.6714, 0.721, 0.7641, 0.8013, 0.8332, 0.8604, 0.8834, 0.9029, 0.9193, 0.9331, 0.9446, 0.9542, 0.9622, 0.9689, 0.9744, 0.979, 0.9827, 0.9858, 0.9884, 0.9905, 0.9922, 0.9937, 0.9948, 0.9958, 0.9966, 0.9972, 0.9977, 0.9981, 0.9985, 0.9988, 1);
+  --spring-fast: var(--mn-motion-spatial-fast-duration) var(--mn-motion-spatial-fast-easing);
+  --spring: var(--mn-motion-spatial-default-duration) var(--mn-motion-spatial-default-easing);
+  --fade: var(--mn-motion-effects-default-duration) var(--mn-motion-effects-default-easing);
+  /* Depth (forecast C3) */
+  --mn-depth-1-shadow: 0 1px 2px rgb(0 0 0 / .30), 0 1px 3px 1px rgb(0 0 0 / .15);
+  --mn-depth-3-shadow: 0 1px 3px rgb(0 0 0 / .30), 0 4px 8px 3px rgb(0 0 0 / .15);
+  /* Fluid space (forecast D1) */
+  --mn-space-margin: clamp(16px, 8px + 2vw, 32px);
+  --mn-space-gutter: clamp(12px, 6px + 1.5vw, 24px);
+  --mn-space-section: clamp(24px, 12px + 3vw, 48px);
+  --mn-space-component: clamp(16px, 12px + 1vw, 24px);
+  /* Shape scale */
+  --xs: 4px; --sm: 8px; --md: 12px; --lg: 16px; --xl: 28px; --full: 9999px;
 }
+:root{--md-sys-color-primary:#006B5E;--md-sys-color-on-primary:#FFFFFF;--md-sys-color-primary-container:#9FF2E2;--md-sys-color-on-primary-container:#005047;--md-sys-color-secondary-container:#CDE8E1;--md-sys-color-on-secondary-container:#334B46;--md-sys-color-error:#BA1A1A;--md-sys-color-on-error:#FFFFFF;--md-sys-color-error-container:#FFDAD6;--md-sys-color-on-error-container:#93000A;--md-sys-color-surface:#F4FBF8;--md-sys-color-on-surface:#171D1B;--md-sys-color-on-surface-variant:#3F4946;--md-sys-color-surface-container-low:#EFF5F2;--md-sys-color-surface-container:#E9EFEC;--md-sys-color-surface-container-high:#E3EAE7;--md-sys-color-surface-container-highest:#DDE4E1;--md-sys-color-outline:#6F7976;--md-sys-color-outline-variant:#BEC9C5;--md-sys-color-inverse-surface:#2B3230;--md-sys-color-inverse-on-surface:#ECF2EF;--md-sys-color-inverse-primary:#83D5C6}
+[data-cat=pdf]{--md-sys-color-primary:#904A44;--md-sys-color-on-primary:#FFFFFF;--md-sys-color-primary-container:#FFDAD6;--md-sys-color-on-primary-container:#73332E;--md-sys-color-secondary-container:#FFDAD6;--md-sys-color-on-secondary-container:#5D3F3C}
+[data-cat=image]{--md-sys-color-primary:#3C6939;--md-sys-color-on-primary:#FFFFFF;--md-sys-color-primary-container:#BCF0B4;--md-sys-color-on-primary-container:#245024;--md-sys-color-secondary-container:#D6E8CE;--md-sys-color-on-secondary-container:#3B4B38}
+[data-cat=video]{--md-sys-color-primary:#805611;--md-sys-color-on-primary:#FFFFFF;--md-sys-color-primary-container:#FFDDB5;--md-sys-color-on-primary-container:#643F00;--md-sys-color-secondary-container:#FBDEBC;--md-sys-color-on-secondary-container:#57432B}
+[data-cat=audio]{--md-sys-color-primary:#31628D;--md-sys-color-on-primary:#FFFFFF;--md-sys-color-primary-container:#CFE5FF;--md-sys-color-on-primary-container:#124A73;--md-sys-color-secondary-container:#D5E4F7;--md-sys-color-on-secondary-container:#3A4857}
 @media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #000000;
-    --glow-1: rgba(255, 90, 60, 0.17);
-    --glow-2: rgba(191, 90, 242, 0.16);
-    --glow-3: rgba(50, 173, 230, 0.17);
-    --glow-4: rgba(255, 159, 10, 0.13);
-    --panel: rgba(28, 28, 30, 0.68);
-    --panel-solid: #1c1c1e;
-    --hairline: rgba(255, 255, 255, 0.12);
-    --hairline-soft: rgba(255, 255, 255, 0.07);
-    --text: #f5f5f7;
-    --text-2: #98989d;
-    --text-3: #636366;
-    --accent: #0a84ff;
-    --accent-press: #3395ff;
-    --fill: rgba(120, 120, 128, 0.24);
-    --fill-2: rgba(120, 120, 128, 0.36);
-    --green: #30d158;
-    --err-bg: rgba(60, 20, 22, 0.85);
-    --err-border: rgba(255, 69, 58, 0.45);
-    --err-text: #ff453a;
-    --shadow: 0 0.5px 1px rgba(0,0,0,0.5), 0 10px 30px rgba(0,0,0,0.55);
-    --shadow-lg: 0 0.5px 1px rgba(0,0,0,0.6), 0 18px 50px rgba(0,0,0,0.7);
-  }
+:root{--md-sys-color-primary:#83D5C6;--md-sys-color-on-primary:#003730;--md-sys-color-primary-container:#005047;--md-sys-color-on-primary-container:#9FF2E2;--md-sys-color-secondary-container:#334B46;--md-sys-color-on-secondary-container:#CDE8E1;--md-sys-color-error:#FFB4AB;--md-sys-color-on-error:#690005;--md-sys-color-error-container:#93000A;--md-sys-color-on-error-container:#FFDAD6;--md-sys-color-surface:#0E1513;--md-sys-color-on-surface:#DDE4E1;--md-sys-color-on-surface-variant:#BEC9C5;--md-sys-color-surface-container-low:#171D1B;--md-sys-color-surface-container:#1B2120;--md-sys-color-surface-container-high:#252B2A;--md-sys-color-surface-container-highest:#303634;--md-sys-color-outline:#899390;--md-sys-color-outline-variant:#3F4946;--md-sys-color-inverse-surface:#DDE4E1;--md-sys-color-inverse-on-surface:#2B3230;--md-sys-color-inverse-primary:#006B5E}
+[data-cat=pdf]{--md-sys-color-primary:#FFB4AC;--md-sys-color-on-primary:#561E1A;--md-sys-color-primary-container:#73332E;--md-sys-color-on-primary-container:#FFDAD6;--md-sys-color-secondary-container:#5D3F3C;--md-sys-color-on-secondary-container:#FFDAD6}
+[data-cat=image]{--md-sys-color-primary:#A1D39A;--md-sys-color-on-primary:#0A390F;--md-sys-color-primary-container:#245024;--md-sys-color-on-primary-container:#BCF0B4;--md-sys-color-secondary-container:#3B4B38;--md-sys-color-on-secondary-container:#D6E8CE}
+[data-cat=video]{--md-sys-color-primary:#F6BC6F;--md-sys-color-on-primary:#462B00;--md-sys-color-primary-container:#643F00;--md-sys-color-on-primary-container:#FFDDB5;--md-sys-color-secondary-container:#57432B;--md-sys-color-on-secondary-container:#FBDEBC}
+[data-cat=audio]{--md-sys-color-primary:#9DCBFB;--md-sys-color-on-primary:#003355;--md-sys-color-primary-container:#124A73;--md-sys-color-on-primary-container:#CFE5FF;--md-sys-color-secondary-container:#3A4857;--md-sys-color-on-secondary-container:#D5E4F7}
+}
+@media (prefers-reduced-motion: reduce) {
+  :root { --mn-motion-spatial-fast-duration: 0ms; --mn-motion-spatial-default-duration: 0ms; }
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { -webkit-text-size-adjust: 100%; }
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  line-height: 1.47;
-  font-size: 15px;
+  font: 400 16px/24px var(--font); letter-spacing: .5px;   /* body-large */
+  background: var(--md-sys-color-surface); color: var(--md-sys-color-on-surface);
   -webkit-font-smoothing: antialiased;
 }
-body::before {
-  content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
-  background-image: radial-gradient(700px 460px at 8% -6%, var(--glow-1), transparent 70%),
-                    radial-gradient(800px 540px at 92% 10%, var(--glow-2), transparent 70%),
-                    radial-gradient(720px 520px at 18% 108%, var(--glow-3), transparent 70%),
-                    radial-gradient(620px 460px at 80% 62%, var(--glow-4), transparent 72%);
-}
-header { text-align: center; padding: 52px 20px 22px; }
-header h1 { font-size: 2.1rem; font-weight: 700; letter-spacing: -0.022em; }
-header p { color: var(--text-2); margin-top: 7px; font-size: 0.95rem; }
-main { max-width: 1060px; margin: 0 auto; padding: 0 20px 60px; }
-footer { text-align: center; color: var(--text-3); font-size: 0.8rem; padding: 28px 20px 48px; }
-footer b { color: var(--text-2); font-weight: 590; }
+svg { display: block; flex-shrink: 0; }
+button, input, select { font: inherit; letter-spacing: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid var(--md-sys-color-primary); outline-offset: 2px; }
 .hidden { display: none !important; }
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 var(--mn-space-margin); }
 
-#errPanel {
-  position: fixed; top: 18px; left: 50%; transform: translateX(-50%); z-index: 50;
-  background: var(--err-bg);
-  -webkit-backdrop-filter: blur(24px) saturate(180%); backdrop-filter: blur(24px) saturate(180%);
-  border: 0.5px solid var(--err-border); color: var(--err-text);
-  padding: 12px 16px; border-radius: 14px; max-width: 640px;
-  display: flex; gap: 14px; align-items: flex-start;
-  box-shadow: var(--shadow-lg); font-size: 0.9rem;
-}
-#errPanel button { background: none; border: none; color: var(--err-text); font-size: 1.05rem; cursor: pointer; line-height: 1; padding: 0 2px; }
+/* ---------- top app bar + hero ---------- */
+.top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding-block: 16px; }
+.brand { display: flex; align-items: center; gap: 12px; font: 500 22px/28px var(--font); letter-spacing: 0; } /* title-large */
+.brand .logo { width: 40px; height: 40px; border-radius: var(--md); display: grid; place-items: center;
+  background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); }
+.chip { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 16px 0 8px;
+  border-radius: var(--sm); background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container);
+  font: 500 14px/20px var(--font); letter-spacing: .1px; }
+.hero { padding-block: var(--mn-space-section) 8px; }
+.hero h1 { font: 400 36px/44px var(--font); letter-spacing: 0; max-width: 20ch; text-wrap: balance; } /* display-small */
+.hero p { margin-top: 12px; color: var(--md-sys-color-on-surface-variant); max-width: 60ch; }
+@media (max-width: 599px) { .hero h1 { font-size: 28px; line-height: 36px; } .chip { display: none; } } /* headline-medium; hero copy carries the privacy promise */
 
-.cat { margin-top: 34px; }
-.cat-head { display: flex; align-items: center; gap: 10px; margin: 0 4px 12px; }
-.cat-head .cat-ic {
-  width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--cat) 82%, #ffffff), var(--cat));
-  color: #fff;
-  box-shadow: 0 1px 3px color-mix(in srgb, var(--cat) 45%, transparent), inset 0 0.5px 0 rgba(255,255,255,0.4);
-}
-.cat-head .cat-ic svg { width: 15px; height: 15px; }
-.cat-head h2 { font-size: 0.82rem; font-weight: 600; color: var(--text); text-transform: uppercase; letter-spacing: 0.06em; }
-.cat-head .key { color: var(--text-3); font-size: 0.7rem; border: 0.5px solid var(--hairline); border-radius: 5px; padding: 1px 6px; background: var(--fill); font-variant-numeric: tabular-nums; }
-.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(235px, 1fr)); gap: 12px; }
-
-.card {
-  background: var(--panel);
-  -webkit-backdrop-filter: blur(28px) saturate(180%); backdrop-filter: blur(28px) saturate(180%);
-  border: 0.5px solid var(--hairline);
-  border-radius: 20px;
-  overflow: hidden;
-  box-shadow: var(--shadow);
-  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
-}
-.card:hover { transform: translateY(-1px); box-shadow: var(--shadow-lg); }
-.card.open { grid-column: 1 / -1; border-color: color-mix(in srgb, var(--cat, var(--accent)) 40%, transparent); transform: none; box-shadow: var(--shadow-lg); }
-.card-head { display: flex; align-items: center; gap: 12px; padding: 15px 17px; cursor: pointer; user-select: none; }
-.card-head .ic {
-  width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 0.85rem; font-weight: 600; color: var(--cat, var(--text-2));
-  background: color-mix(in srgb, var(--cat, #8e8e93) 16%, transparent);
-  font-variant-numeric: tabular-nums;
-}
-.card-head .t { font-weight: 590; font-size: 0.92rem; letter-spacing: -0.01em; }
-.card-head .d { color: var(--text-2); font-size: 0.78rem; }
-.card-head .x { margin-left: auto; background: var(--fill); border: none; color: var(--text-2); font-size: 0.95rem; cursor: pointer; width: 26px; height: 26px; border-radius: 50%; line-height: 1; }
-.card-head .x:hover { background: var(--fill-2); }
-.card-body { padding: 2px 17px 18px; }
-
+/* ---------- drop zones ---------- */
 .dz {
-  border: 1.5px dashed var(--hairline); border-radius: 14px;
-  padding: 36px 16px; text-align: center; color: var(--text-2);
-  cursor: pointer; transition: all .15s ease; font-size: 0.9rem;
+  display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center;
+  padding: 32px 16px; border: 2px dashed var(--md-sys-color-outline-variant); border-radius: var(--lg);
+  color: var(--md-sys-color-on-surface-variant); cursor: pointer;
+  transition: background-color var(--fade), border-color var(--fade), border-radius var(--spring-fast);
 }
-.dz:hover, .dz.over { border-color: var(--cat, var(--accent)); color: var(--cat, var(--accent)); background: color-mix(in srgb, var(--cat, var(--accent)) 7%, transparent); }
+.dz svg { width: 32px; height: 32px; color: var(--md-sys-color-primary); margin-bottom: 8px; }
+.dz b { font: 500 16px/24px var(--font); letter-spacing: .15px; color: var(--md-sys-color-on-surface); } /* title-medium */
+.dz span { font-size: 14px; line-height: 20px; letter-spacing: .25px; }
+.dz:hover, .dz.over { border-color: var(--md-sys-color-primary); background: color-mix(in srgb, var(--md-sys-color-primary) 8%, transparent); }
+.dz.over { border-radius: var(--xl); }
+.hero .dz { margin-top: var(--mn-space-section); padding-block: 40px; background: var(--md-sys-color-surface-container-low); border-radius: var(--xl); }
+.hero .dz:hover, .hero .dz.over { background: color-mix(in srgb, var(--md-sys-color-primary) 8%, var(--md-sys-color-surface-container-low)); }
 
-.fileinfo { display: flex; align-items: center; gap: 8px; background: var(--fill); border-radius: 10px; padding: 9px 13px; margin-bottom: 13px; font-size: 0.88rem; flex-wrap: wrap; }
-.fileinfo .fi-size { color: var(--text-2); font-size: 0.8rem; }
-.fileinfo .clear { margin-left: auto; background: none; border: none; color: var(--text-2); cursor: pointer; font-size: 0.95rem; }
-.flist { margin-bottom: 12px; }
-.flist .fitem { display: flex; align-items: center; gap: 8px; padding: 8px 13px; background: var(--fill); border-radius: 9px; margin-bottom: 6px; font-size: 0.85rem; }
-.flist .fitem .sz { color: var(--text-2); font-size: 0.75rem; }
-.flist .fitem button { margin-left: auto; background: none; border: none; color: var(--text-2); cursor: pointer; }
-.addmore { background: none; border: 1.5px dashed var(--hairline); color: var(--text-2); border-radius: 980px; padding: 7px 16px; cursor: pointer; font-size: 0.82rem; margin-bottom: 14px; font-family: inherit; }
-.addmore:hover { border-color: var(--accent); color: var(--accent); }
+/* ---------- categories + tool cards ---------- */
+main { padding-bottom: var(--mn-space-section); }
+.cat { margin-top: var(--mn-space-section); scroll-margin-top: 16px; }
+.cat-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.cat-head h2 { font: 400 22px/28px var(--font); letter-spacing: 0; } /* title-large */
+.cat-head .n { color: var(--md-sys-color-on-surface-variant); font-size: 14px; line-height: 20px; letter-spacing: .25px; }
+.ic { width: 40px; height: 40px; border-radius: var(--md); display: grid; place-items: center; flex-shrink: 0;
+  background: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container); }
+.ic svg { width: 24px; height: 24px; }
+kbd { font: 500 12px/16px var(--font); padding: 2px 8px; border-radius: var(--xs);
+  border: 1px solid var(--md-sys-color-outline-variant); color: var(--md-sys-color-on-surface-variant); }
+.cat-head kbd { margin-left: auto; }
+@media (hover: none) { .cat-head kbd { display: none; } }
 
-.opt-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; font-size: 0.88rem; flex-wrap: wrap; }
-.opt-row > label { min-width: 112px; color: var(--text-2); }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
+.card {
+  background: var(--md-sys-color-surface-container-low); border-radius: var(--md); overflow: hidden;
+  transition: border-radius var(--spring-fast), background-color var(--fade), box-shadow var(--fade);
+}
+.card:hover, .card:focus-within { border-radius: var(--lg); }
+.card.open { grid-column: 1 / -1; border-radius: var(--xl); background: var(--md-sys-color-surface-container); box-shadow: var(--mn-depth-1-shadow); }
+.card-head { display: flex; align-items: center; }
+.head-btn {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 16px; text-align: left;
+  padding: 16px; background: none; border: 0; border-radius: inherit; position: relative;
+}
+.head-btn::after { content: ''; position: absolute; inset: 0; background: var(--md-sys-color-on-surface); opacity: 0; transition: opacity var(--fade); pointer-events: none; }
+.head-btn:hover::after { opacity: .08; }
+.head-btn:active::after { opacity: .10; }
+.card.open .head-btn { cursor: default; }
+.card.open .head-btn::after { display: none; }
+.head-btn .t { font: 500 16px/24px var(--font); letter-spacing: .15px; display: block; } /* title-medium */
+.head-btn .d { font-size: 14px; line-height: 20px; letter-spacing: .25px; color: var(--md-sys-color-on-surface-variant); display: block; } /* body-medium */
+.head-btn .chev { margin-left: auto; color: var(--md-sys-color-on-surface-variant); }
+.card.open .chev { display: none; }
+.x { width: 48px; height: 48px; margin-right: 8px; border: 0; background: none; border-radius: var(--full);
+  display: grid; place-items: center; color: var(--md-sys-color-on-surface-variant); transition: background-color var(--fade), border-radius var(--spring-fast); }
+.x:hover { background: color-mix(in srgb, var(--md-sys-color-on-surface) 8%, transparent); }
+.card-body { padding: 0 var(--mn-space-component) var(--mn-space-component); }
+.card-body > .dz { margin-top: 4px; }
+
+/* ---------- selected files (segmented list, 2dp gaps) ---------- */
+.seglist { display: flex; flex-direction: column; gap: 2px; margin-bottom: 16px; }
+.seglist > * { border-radius: var(--xs); }
+.seglist > :first-child { border-top-left-radius: var(--lg); border-top-right-radius: var(--lg); }
+.seglist > :last-child { border-bottom-left-radius: var(--lg); border-bottom-right-radius: var(--lg); }
+.fitem { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 4px 8px 16px; background: var(--md-sys-color-surface-container-highest); }
+.fitem > svg { color: var(--md-sys-color-primary); }
+.fitem .nm { min-width: 0; flex: 1; }
+.fitem .nm b { display: block; font-weight: 500; font-size: 14px; line-height: 20px; letter-spacing: .1px; overflow-wrap: anywhere; }
+.fitem .nm span { display: block; font-size: 12px; line-height: 16px; letter-spacing: .4px; color: var(--md-sys-color-on-surface-variant); }
+.fitem .x { margin: 0; }
+
+/* ---------- options ---------- */
+.opt-row { display: grid; grid-template-columns: 160px 1fr; align-items: center; gap: 8px 16px; margin-bottom: 16px; }
+.opt-row > label { font-size: 14px; line-height: 20px; letter-spacing: .25px; color: var(--md-sys-color-on-surface-variant); }
+@media (max-width: 599px) { .opt-row { grid-template-columns: 1fr; } }
+.ctrl { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-width: 0; }
 .opt-row select, .opt-row input[type=number], .opt-row input[type=text] {
-  background: var(--panel-solid); border: 0.5px solid var(--hairline); color: var(--text);
-  border-radius: 8px; padding: 6px 10px; font-size: 0.88rem; font-family: inherit;
-  box-shadow: 0 0.5px 2px rgba(0,0,0,0.04);
+  height: 48px; padding: 0 16px; min-width: 0; max-width: 100%;
+  background: transparent; border: 1px solid var(--md-sys-color-outline); border-radius: var(--xs);
+  font-size: 16px; letter-spacing: .5px;
 }
-.opt-row select:focus, .opt-row input:focus { outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent); outline-offset: 0; border-color: var(--accent); }
-.opt-row input[type=number] { width: 100px; }
-.opt-row input[type=text] { width: 210px; }
-.opt-row input[type=range] { width: 180px; accent-color: var(--accent); }
-.opt-row .rv { color: var(--text-2); font-size: 0.83rem; min-width: 44px; font-variant-numeric: tabular-nums; }
-.opt-row .rl { margin-right: 4px; color: var(--text); cursor: pointer; display: inline-block; padding: 2px 0; }
-.opt-row input[type=radio], .opt-row input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; vertical-align: -2px; }
-.hint { color: var(--text-2); font-size: 0.78rem; margin: -4px 0 12px; }
-.tracks { display: flex; flex-direction: column; gap: 6px; width: 100%; }
-.tracks .tk { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--fill); border-radius: 9px; font-size: 0.85rem; cursor: pointer; }
-.tracks .tk .tn { font-weight: 590; }
-.tracks .tk .ti { color: var(--text-2); font-size: 0.76rem; margin-left: auto; text-align: right; }
-.tracks .tsel { display: flex; gap: 12px; font-size: 0.78rem; margin-top: 2px; }
-.tracks .tsel a { color: var(--accent); cursor: pointer; text-decoration: none; }
-.tracks .tsel a:hover { text-decoration: underline; }
+.opt-row select { padding-right: 8px; }
+.opt-row select option { background: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface); }
+.opt-row select:hover, .opt-row input:hover { border-color: var(--md-sys-color-on-surface); }
+.opt-row select:focus, .opt-row input:focus { outline: none; border-color: var(--md-sys-color-primary); box-shadow: inset 0 0 0 1px var(--md-sys-color-primary); }
+.opt-row input[type=number] { width: 128px; }
+.opt-row input[type=text] { width: 280px; }
+.opt-row input[type=range] { width: 240px; max-width: 100%; height: 48px; accent-color: var(--md-sys-color-primary); }
+.opt-row input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--md-sys-color-primary); }
+.rv { font: 500 14px/20px var(--font); font-variant-numeric: tabular-nums; min-width: 56px; }
+.hint { color: var(--md-sys-color-on-surface-variant); font-size: 14px; line-height: 20px; letter-spacing: .25px; margin: 0 0 16px; }
 
-button.go {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--cat, var(--accent)) 88%, #ffffff), var(--cat, var(--accent)));
-  color: var(--on-accent); border: none;
-  border-radius: 980px; padding: 8px 22px; font-size: 0.9rem; font-weight: 590;
-  cursor: pointer; margin-top: 6px; font-family: inherit;
-  box-shadow: 0 1px 4px color-mix(in srgb, var(--cat, var(--accent)) 40%, transparent), inset 0 0.5px 0 rgba(255,255,255,0.35);
-  transition: filter .12s ease, transform .12s ease;
+/* Segmented button (radio choices) */
+.seg { display: inline-flex; border: 1px solid var(--md-sys-color-outline); border-radius: var(--full); overflow: hidden; max-width: 100%; }
+.seg label { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 16px; cursor: pointer;
+  font: 500 14px/20px var(--font); letter-spacing: .1px; transition: background-color var(--fade); }
+.seg label + label { border-left: 1px solid var(--md-sys-color-outline); }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg .ck { display: none; width: 18px; height: 18px; }
+.seg label:hover { background: color-mix(in srgb, var(--md-sys-color-on-surface) 8%, transparent); }
+.seg label:has(:checked) { background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
+.seg label:has(:checked) .ck { display: block; }
+.seg label:has(:focus-visible) { outline: 3px solid var(--md-sys-color-primary); outline-offset: -3px; }
+
+/* Radio list (choices with supporting text) */
+.radios { width: 100%; margin: 0; }
+.radios label { display: flex; align-items: center; gap: 16px; min-height: 56px; padding: 8px 16px; cursor: pointer;
+  background: var(--md-sys-color-surface-container-highest); transition: background-color var(--fade); }
+.radios label:has(:checked) { background: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
+.radios input { width: 20px; height: 20px; flex-shrink: 0; accent-color: var(--md-sys-color-primary); }
+.radios b { display: block; font-weight: 500; font-size: 14px; line-height: 20px; letter-spacing: .1px; }
+.radios b + span { display: block; font-size: 14px; line-height: 20px; letter-spacing: .25px; opacity: .8; }
+.radios b + span::first-letter { text-transform: uppercase; }
+.opt-row:has(.radios) { align-items: start; }
+@media (min-width: 600px) { .opt-row:has(.radios) > label { padding-top: 18px; } }
+
+/* Audio track picker */
+.tracks { width: 100%; margin: 0; }
+.tracks .tk { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 16px; background: var(--md-sys-color-surface-container-highest); cursor: pointer; }
+.tracks .tk input { width: 18px; height: 18px; accent-color: var(--md-sys-color-primary); }
+.tracks .tk .tn { font-weight: 500; font-size: 14px; letter-spacing: .1px; }
+.tracks .tk .ti { color: var(--md-sys-color-on-surface-variant); font-size: 12px; line-height: 16px; letter-spacing: .4px; margin-left: auto; text-align: right; }
+.tsel { display: flex; gap: 8px; margin-top: 8px; }
+
+/* ---------- buttons (pill → medium corners on press: forecast E1) ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 40px; padding: 0 24px; border-radius: var(--full); border: 0;
+  font: 500 14px/20px var(--font); letter-spacing: .1px; position: relative;
+  transition: border-radius var(--spring-fast), background-color var(--fade), box-shadow var(--fade);
 }
-button.go:hover { filter: brightness(0.94) saturate(1.1); }
-button.go:active { transform: scale(0.97); }
-button.sec {
-  background: var(--fill); color: var(--text); border: none;
-  border-radius: 980px; padding: 8px 18px; font-size: 0.88rem; font-weight: 500;
-  cursor: pointer; margin-right: 8px; margin-top: 6px; font-family: inherit;
+.btn::before { content: ''; position: absolute; inset: -4px 0; } /* 48dp target */
+.btn:active, .x:active { border-radius: var(--md); }
+.btn svg { width: 18px; height: 18px; }
+.go { background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); }
+.go:hover { background: color-mix(in srgb, var(--md-sys-color-on-primary) 8%, var(--md-sys-color-primary)); box-shadow: var(--mn-depth-1-shadow); }
+.go:active { background: color-mix(in srgb, var(--md-sys-color-on-primary) 10%, var(--md-sys-color-primary)); box-shadow: none; }
+.outl { background: transparent; border: 1px solid var(--md-sys-color-outline); color: var(--md-sys-color-primary); }
+.txt { background: transparent; color: var(--md-sys-color-primary); padding: 0 12px; }
+.outl:hover, .txt:hover { background: color-mix(in srgb, var(--md-sys-color-primary) 8%, transparent); }
+.outl:active, .txt:active { background: color-mix(in srgb, var(--md-sys-color-primary) 10%, transparent); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+
+/* ---------- progress + result ---------- */
+.prog { padding: 8px 0; }
+.prog .row { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 12px; font-size: 14px; line-height: 20px; letter-spacing: .25px; color: var(--md-sys-color-on-surface-variant); }
+.prog .ppct { font-weight: 500; color: var(--md-sys-color-on-surface); font-variant-numeric: tabular-nums; }
+.prog .bar { display: flex; gap: 4px; height: 4px; }
+.prog .fill { width: 0%; border-radius: var(--full); background: var(--md-sys-color-primary); transition: width var(--spring); }
+.prog .track { flex: 1; border-radius: var(--full); background: var(--md-sys-color-secondary-container); }
+.result .ok { display: flex; align-items: center; gap: 12px; font: 500 16px/24px var(--font); letter-spacing: .15px; margin-bottom: 8px; }
+.result .ok svg { width: 32px; height: 32px; padding: 4px; border-radius: var(--full); background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); }
+.result .rnote { color: var(--md-sys-color-on-surface-variant); font-size: 14px; line-height: 20px; letter-spacing: .25px; margin-bottom: 16px; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* ---------- snackbar (errors) ---------- */
+#errPanel {
+  position: fixed; z-index: 50; left: 50%; bottom: max(16px, env(safe-area-inset-bottom));
+  transform: translateX(-50%); width: min(560px, calc(100vw - 32px));
+  display: flex; align-items: center; gap: 8px; padding: 6px 4px 6px 16px; min-height: 48px;
+  background: var(--md-sys-color-inverse-surface); color: var(--md-sys-color-inverse-on-surface);
+  border-radius: var(--xs); box-shadow: var(--mn-depth-3-shadow);
+  font-size: 14px; line-height: 20px; letter-spacing: .25px;
+  animation: snack-in var(--spring);
 }
-button.sec:hover { background: var(--fill-2); }
+#errMsg { flex: 1; padding-block: 8px; }
+#errPanel .x { margin: 0; color: inherit; }
+#errPanel .x:hover { background: color-mix(in srgb, var(--md-sys-color-inverse-on-surface) 8%, transparent); }
+@keyframes snack-in { from { transform: translate(-50%, 24px); opacity: 0; } }
 
-.prog { padding: 14px 0 4px; }
-.prog .pstat { font-size: 0.86rem; color: var(--text-2); margin-bottom: 10px; }
-.prog .bar { height: 6px; background: var(--fill); border-radius: 3px; overflow: hidden; }
-.prog .fill { height: 100%; width: 0%; background: var(--cat, var(--accent)); border-radius: 3px; transition: width .25s ease; }
-.prog .ppct { text-align: right; color: var(--text-3); font-size: 0.78rem; margin-top: 6px; font-variant-numeric: tabular-nums; }
-
-.result { padding: 10px 0 2px; }
-.result .ok { color: var(--green); font-weight: 590; font-size: 0.92rem; margin-bottom: 6px; }
-.result .rnote { color: var(--text-2); font-size: 0.85rem; margin-bottom: 12px; white-space: pre-wrap; }
+footer { text-align: center; padding: 8px var(--mn-space-margin) calc(48px + env(safe-area-inset-bottom));
+  color: var(--md-sys-color-on-surface-variant); font-size: 14px; line-height: 24px; letter-spacing: .25px; }
 </style>
 </head>
 <body>
 
-<header>
-  <h1>MediaPrivacy</h1>
-  <p>Convert, compress &amp; clean files &mdash; processed 100% in your browser. Nothing is uploaded.</p>
-</header>
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><span class="logo"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 4 5v6c0 5.5 3.4 9.7 8 11 4.6-1.3 8-5.5 8-11V5z"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg></span>MediaPrivacy</div>
+    <span class="chip"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Stays on your device</span>
+  </header>
 
-<div id="errPanel" class="hidden"><span id="errMsg"></span><button id="errX" title="Dismiss">&times;</button></div>
+  <section class="hero">
+    <h1>Your files, handled privately</h1>
+    <p>Shrink, convert and tidy up PDFs, photos, video and audio. It all happens on this device, so nothing is ever uploaded.</p>
+    <div class="dz" id="heroDz" role="button" tabindex="0">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3m0 0-4 4m4-4 4 4"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
+      <b>Drop a file here</b>
+      <span>or click to choose one. We’ll open the right tool.</span>
+      <input type="file" id="heroFile" multiple hidden>
+    </div>
+  </section>
 
-<main id="cats"></main>
+  <main id="cats"></main>
+</div>
 
-<footer>Files never leave your device. Keyboard: <b>1&ndash;4</b> jump to a category &middot; <b>Esc</b> closes a tool.</footer>
+<div id="errPanel" class="hidden" role="alert"><span id="errMsg"></span><button class="x" id="errX" aria-label="Dismiss"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+
+<footer>Everything runs in your browser. Your files never leave. Shortcuts: <kbd>1</kbd>&ndash;<kbd>4</kbd> jump to a section &middot; <kbd>Esc</kbd> closes a tool.</footer>
 
 <script>
 'use strict';
@@ -237,7 +298,24 @@ const fmtSize = b => b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(1) +
 const stripExt = n => n.replace(/\.[^.]+$/, '');
 const extOf = n => (n.match(/\.[^.]+$/) || [''])[0].toLowerCase();
 
-function showError(msg) { $('errMsg').textContent = msg; $('errPanel').classList.remove('hidden'); }
+// Haptic pairing (forecast E6); never the only feedback, no-op where unsupported.
+const haptic = p => { try { navigator.vibrate && navigator.vibrate(p); } catch (_) {} };
+function showError(msg) {
+  const panel = $('errPanel');
+  $('errMsg').textContent = msg;
+  panel.classList.add('hidden'); void panel.offsetWidth; // restart the entry spring
+  panel.classList.remove('hidden');
+  haptic([30, 60, 30]);
+}
+// The CDN libraries are deferred so the UI paints first; anything that uses them awaits this.
+const libsReady = new Promise(res => {
+  const done = () => {
+    if (typeof pdfjsLib !== 'undefined')
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.9.359/pdf.worker.min.js';
+    res();
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', done); else done();
+});
 $('errX') && $('errX').addEventListener('click', () => $('errPanel').classList.add('hidden'));
 
 function readBytes(fileOrBlob) {
@@ -856,28 +934,28 @@ function toWinAnsi(s) {
 
 /* ============================ card configs ============================ */
 const CATEGORIES = [
-  { id: 'pdf', label: 'PDF Tools', color: '#ff453a',
+  { id: 'pdf', label: 'PDFs',
     icon: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>' },
-  { id: 'image', label: 'Image Tools', color: '#bf5af2',
+  { id: 'image', label: 'Photos',
     icon: '<rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>' },
-  { id: 'video', label: 'Video Tools', color: '#ff9f0a',
+  { id: 'video', label: 'Video',
     icon: '<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/>' },
-  { id: 'audio', label: 'Audio Tools', color: '#32ade6',
+  { id: 'audio', label: 'Audio',
     icon: '<path d="M4 10v4M8 7v10M12 5v14M16 7v10M20 10v4"/>' }
 ];
 
-const BITRATES = [['128k', '128 kbps'], ['192k', '192 kbps (recommended)'], ['256k', '256 kbps'], ['320k', '320 kbps']];
+const BITRATES = [['128k', '128 kbps (smaller file)'], ['192k', '192 kbps (recommended)'], ['256k', '256 kbps'], ['320k', '320 kbps (best)']];
 
 const CARDS = [
 /* ---------- PDF ---------- */
 {
-  id: 'pdf-images', cat: 'pdf', title: 'PDF to Images', desc: 'Each page becomes a PNG',
-  accept: '.pdf,application/pdf', actionLabel: 'Convert to Images',
+  id: 'pdf-images', cat: 'pdf', title: 'Turn pages into images', desc: 'Save each page as a sharp PNG',
+  accept: '.pdf,application/pdf', actionLabel: 'Make images',
   validate: f => { if (f.type !== 'application/pdf' && !/\.pdf$/i.test(f.name)) throw new Error('Please select a PDF file.'); },
-  fileInfo: async (f, setInfo) => { const d = await loadPdfLib(await readBytes(f)); setInfo(`${d.getPageCount()} pages`); },
+  fileInfo: async (f, setInfo) => { const d = await loadPdfLib(await readBytes(f)); const n = d.getPageCount(); setInfo(`${n} page${n === 1 ? '' : 's'}`); },
   options: [
-    { type: 'radio', id: 'pages', label: 'Pages', value: 'all', choices: [['all', 'All pages'], ['specific', 'Specific pages']] },
-    { type: 'text', id: 'range', label: 'Page range', placeholder: 'e.g. 1-3, 5, 8', showIf: get => get('pages') === 'specific' }
+    { type: 'radio', id: 'pages', label: 'Pages', value: 'all', choices: [['all', 'Every page'], ['specific', 'Just some']] },
+    { type: 'text', id: 'range', label: 'Which pages', placeholder: 'e.g. 1-3, 5, 8', showIf: get => get('pages') === 'specific' }
   ],
   run: async ctx => {
     const pdf = await openPdfJs(ctx.file);
@@ -895,10 +973,10 @@ const CARDS = [
   }
 },
 {
-  id: 'split-pdf', cat: 'pdf', title: 'Split PDF', desc: 'Split into two documents',
-  accept: '.pdf,application/pdf', actionLabel: 'Split PDF',
+  id: 'split-pdf', cat: 'pdf', title: 'Split a PDF', desc: 'Cut one document into two',
+  accept: '.pdf,application/pdf', actionLabel: 'Split it',
   validate: f => { if (f.type !== 'application/pdf' && !/\.pdf$/i.test(f.name)) throw new Error('Please select a PDF file.'); },
-  fileInfo: async (f, setInfo) => { const d = await loadPdfLib(await readBytes(f)); setInfo(`${d.getPageCount()} pages`); },
+  fileInfo: async (f, setInfo) => { const d = await loadPdfLib(await readBytes(f)); const n = d.getPageCount(); setInfo(`${n} page${n === 1 ? '' : 's'}`); },
   options: [{ type: 'number', id: 'splitAt', label: 'Split after page', value: 1, min: 1 }],
   run: async ctx => {
     const src = await loadPdfLib(await readBytes(ctx.file));
@@ -922,8 +1000,8 @@ const CARDS = [
   }
 },
 {
-  id: 'merge-pdf', cat: 'pdf', title: 'Merge PDFs', desc: 'Combine multiple PDFs into one',
-  accept: '.pdf,application/pdf', multiple: true, actionLabel: 'Merge PDFs',
+  id: 'merge-pdf', cat: 'pdf', title: 'Combine PDFs', desc: 'Join several files into one, in order',
+  accept: '.pdf,application/pdf', multiple: true, actionLabel: 'Combine',
   filter: f => f.type === 'application/pdf' || /\.pdf$/i.test(f.name),
   run: async ctx => {
     if (ctx.files.length < 2) throw new Error('Add at least 2 PDF files to merge.');
@@ -938,15 +1016,15 @@ const CARDS = [
   }
 },
 {
-  id: 'compress-pdf', cat: 'pdf', title: 'Compress PDF', desc: 'Reduce PDF file size',
-  accept: '.pdf,application/pdf', actionLabel: 'Compress PDF',
+  id: 'compress-pdf', cat: 'pdf', title: 'Shrink a PDF', desc: 'Make it small enough to email',
+  accept: '.pdf,application/pdf', actionLabel: 'Shrink it',
   validate: f => { if (f.type !== 'application/pdf' && !/\.pdf$/i.test(f.name)) throw new Error('Please select a PDF file.'); },
-  fileInfo: async (f, setInfo) => { const d = await loadPdfLib(await readBytes(f)); setInfo(`${d.getPageCount()} pages`); },
+  fileInfo: async (f, setInfo) => { const d = await loadPdfLib(await readBytes(f)); const n = d.getPageCount(); setInfo(`${n} page${n === 1 ? '' : 's'}`); },
   options: [{
-    type: 'radio', id: 'mode', label: 'Mode', value: 'balanced', choices: [
-      ['lossless', 'Lossless — restructure only, no quality loss'],
-      ['balanced', 'Balanced — recompress embedded images, text stays sharp & selectable'],
-      ['maximum', 'Maximum — convert pages to images (smallest, text no longer selectable)']
+    type: 'radio', id: 'mode', label: 'How much', value: 'balanced', choices: [
+      ['lossless', 'Gentle — tidies up the file, no quality loss'],
+      ['balanced', 'Balanced — lighter images, text stays sharp and selectable'],
+      ['maximum', 'Maximum — smallest file, but pages become pictures and text can’t be selected']
     ]
   }],
   run: async ctx => {
@@ -969,7 +1047,7 @@ const CARDS = [
       return {
         files: [{ blob: ctx.file, name: ctx.file.name }],
         note: `Compression could not make this PDF smaller (result would be ${fmtSize(blob.size)} vs the original ${fmtSize(ctx.file.size)}), so your ORIGINAL file is returned unchanged — metadata was NOT removed.` +
-          (mode !== 'maximum' ? ' For scanned documents, try "Maximum" mode.' : '')
+          (mode !== 'maximum' ? ' For scanned documents, try "Maximum".' : '')
       };
     }
     return {
@@ -980,7 +1058,7 @@ const CARDS = [
   }
 },
 {
-  id: 'images-pdf', cat: 'pdf', title: 'Images to PDF', desc: 'One image per page',
+  id: 'images-pdf', cat: 'pdf', title: 'Photos to PDF', desc: 'One photo per page, ready to share',
   accept: 'image/*', multiple: true, actionLabel: 'Create PDF',
   filter: f => f.type.startsWith('image/'),
   run: async ctx => {
@@ -1006,7 +1084,7 @@ const CARDS = [
   }
 },
 {
-  id: 'srt-pdf', cat: 'pdf', title: 'SRT to PDF', desc: 'Formatted subtitle transcript',
+  id: 'srt-pdf', cat: 'pdf', title: 'Subtitles to transcript', desc: 'Turn an .srt file into a readable PDF',
   accept: '.srt,.txt', actionLabel: 'Create PDF',
   validate: f => { if (!/\.(srt|txt)$/i.test(f.name)) throw new Error('Please select an .srt subtitle file.'); },
   options: [],
@@ -1041,13 +1119,13 @@ const CARDS = [
   }
 },
 {
-  id: 'eml-pdf', cat: 'pdf', title: 'Email to PDF', desc: 'Convert an .eml message',
+  id: 'eml-pdf', cat: 'pdf', title: 'Save an email as PDF', desc: 'Keep an .eml message as a document',
   accept: '.eml,message/rfc822', actionLabel: 'Create PDF',
   validate: f => { if (!/\.eml$/i.test(f.name) && f.type !== 'message/rfc822') throw new Error('Please select an .eml email file.'); },
   options: [{
     type: 'radio', id: 'layout', label: 'Layout', value: 'formatted', choices: [
-      ['formatted', 'Formatted — preserves the email’s look (rendered as images)'],
-      ['text', 'Plain text — selectable & compact']
+      ['formatted', 'As it looks — keeps the email’s design (saved as images)'],
+      ['text', 'Text only — smaller, and the text can be selected']
     ]
   }],
   run: async ctx => {
@@ -1125,7 +1203,7 @@ const CARDS = [
 
 /* ---------- Image ---------- */
 {
-  id: 'resize-image', cat: 'image', title: 'Resize Image', desc: 'Change image dimensions',
+  id: 'resize-image', cat: 'image', title: 'Resize a photo', desc: 'Make it bigger or smaller',
   accept: 'image/*', actionLabel: 'Resize',
   validate: f => { if (!f.type.startsWith('image/')) throw new Error('Please select an image file.'); },
   fileInfo: async (f, setInfo, card) => {
@@ -1138,7 +1216,7 @@ const CARDS = [
   options: [
     { type: 'number', id: 'width', label: 'Width (px)', value: '', min: 1, max: 20000 },
     { type: 'number', id: 'height', label: 'Height (px)', value: '', min: 1, max: 20000 },
-    { type: 'checkbox', id: 'lock', label: 'Lock aspect ratio', value: true }
+    { type: 'checkbox', id: 'lock', label: 'Keep proportions', value: true }
   ],
   wire: card => {
     const w = $('opt-resize-image-width'), h = $('opt-resize-image-height'), lock = $('opt-resize-image-lock');
@@ -1160,10 +1238,10 @@ const CARDS = [
   }
 },
 {
-  id: 'convert-image', cat: 'image', title: 'Convert Image', desc: 'PNG / JPEG / WebP',
+  id: 'convert-image', cat: 'image', title: 'Change photo format', desc: 'Switch between PNG, JPEG and WebP',
   accept: 'image/*', actionLabel: 'Convert',
   validate: f => { if (!f.type.startsWith('image/')) throw new Error('Please select an image file.'); },
-  options: [{ type: 'select', id: 'format', label: 'Output format', value: 'image/png', choices: [['image/png', 'PNG'], ['image/jpeg', 'JPEG'], ['image/webp', 'WebP']] }],
+  options: [{ type: 'select', id: 'format', label: 'Save as', value: 'image/png', choices: [['image/png', 'PNG'], ['image/jpeg', 'JPEG'], ['image/webp', 'WebP']] }],
   run: async ctx => {
     const type = ctx.opt('format');
     const img = await loadImage(ctx.file);
@@ -1174,7 +1252,7 @@ const CARDS = [
   }
 },
 {
-  id: 'compress-image', cat: 'image', title: 'Compress Image', desc: 'Reduce image file size',
+  id: 'compress-image', cat: 'image', title: 'Shrink a photo', desc: 'Smaller file, same look',
   accept: 'image/*', actionLabel: 'Compress',
   validate: f => { if (!f.type.startsWith('image/')) throw new Error('Please select an image file.'); },
   options: [{ type: 'range', id: 'quality', label: 'Quality', value: 75, min: 30, max: 95, suffix: '%' }],
@@ -1206,8 +1284,8 @@ const CARDS = [
   }
 },
 {
-  id: 'remove-metadata', cat: 'image', title: 'Remove Metadata', desc: 'Strip EXIF / GPS / document info',
-  accept: '*/*', actionLabel: 'Remove Metadata', largeHint: true,
+  id: 'remove-metadata', cat: 'image', title: 'Remove hidden info', desc: 'Wipe location, camera and author details',
+  accept: '*/*', actionLabel: 'Clean it', largeHint: true,
   validate: () => {},
   options: [],
   run: async ctx => {
@@ -1244,11 +1322,11 @@ const CARDS = [
 
 /* ---------- Video ---------- */
 {
-  id: 'video-audio', cat: 'video', title: 'Video to Audio', desc: 'Extract audio track',
+  id: 'video-audio', cat: 'video', title: 'Pull audio from video', desc: 'Keep just the sound',
   accept: 'video/*', actionLabel: 'Extract Audio', largeHint: true, validate: vVideo,
   options: [
     { type: 'select', id: 'format', label: 'Format', value: 'mp3', choices: [['mp3', 'MP3'], ['wav', 'WAV'], ['m4a', 'M4A'], ['ogg', 'OGG']] },
-    { type: 'select', id: 'bitrate', label: 'Bitrate', value: '192k', choices: BITRATES, showIf: get => get('format') !== 'wav' }
+    { type: 'select', id: 'bitrate', label: 'Audio quality', value: '192k', choices: BITRATES, showIf: get => get('format') !== 'wav' }
   ],
   run: async ctx => {
     const fmt = ctx.opt('format'), br = ctx.opt('bitrate') || '192k';
@@ -1264,8 +1342,8 @@ const CARDS = [
   }
 },
 {
-  id: 'video-mp4', cat: 'video', title: 'Convert to MP4', desc: 'Any video to MP4 (H.264)',
-  accept: 'video/*', actionLabel: 'Convert to MP4', largeHint: true, validate: vVideo,
+  id: 'video-mp4', cat: 'video', title: 'Make it an MP4', desc: 'Plays on almost any device',
+  accept: 'video/*', actionLabel: 'Convert', largeHint: true, validate: vVideo,
   options: [],
   run: async ctx => {
     const out = await ffmpegJob(ctx, ctx.file, (i, o) => ['-i', i, '-c:v', 'libx264', '-preset', 'medium', '-map_metadata', '-1', '-y', o], '.mp4');
@@ -1273,9 +1351,9 @@ const CARDS = [
   }
 },
 {
-  id: 'video-compress', cat: 'video', title: 'Compress Video', desc: 'Reduce video file size',
+  id: 'video-compress', cat: 'video', title: 'Shrink a video', desc: 'Smaller file, still looks good',
   accept: 'video/*', actionLabel: 'Compress', largeHint: true, validate: vVideo,
-  options: [{ type: 'radio', id: 'crf', label: 'Level', value: '28', choices: [['23', 'Light (best quality)'], ['28', 'Medium (recommended)'], ['33', 'Strong (smallest)']] }],
+  options: [{ type: 'radio', id: 'crf', label: 'How much', value: '28', choices: [['23', 'A little (looks best)'], ['28', 'Balanced (recommended)'], ['33', 'A lot (smallest file)']] }],
   run: async ctx => {
     const out = await ffmpegJob(ctx, ctx.file, (i, o) => ['-i', i, '-c:v', 'libx264', '-crf', ctx.opt('crf'), '-preset', 'medium', '-map_metadata', '-1', '-y', o], '.mp4');
     const blob = new Blob([out], { type: 'video/mp4' });
@@ -1284,12 +1362,12 @@ const CARDS = [
       files: [{ blob, name: `${stripExt(ctx.file.name)}_compressed.mp4` }],
       note: pct > 0
         ? `${fmtSize(ctx.file.size)} → ${fmtSize(blob.size)} (${pct}% smaller). Metadata removed.`
-        : `Output is ${fmtSize(blob.size)} — not smaller than the original (${fmtSize(ctx.file.size)}); this video is already efficiently encoded. Try the "Strong" level. Metadata removed.`
+        : `Output is ${fmtSize(blob.size)} — not smaller than the original (${fmtSize(ctx.file.size)}); this video is already efficiently encoded. Try "A lot". Metadata removed.`
     };
   }
 },
 {
-  id: 'trim-video', cat: 'video', title: 'Trim Video', desc: 'Cut a clip without re-encoding',
+  id: 'trim-video', cat: 'video', title: 'Trim a video', desc: 'Keep just the part you need, with no quality loss',
   accept: 'video/*', actionLabel: 'Trim', largeHint: true, validate: vVideo,
   options: [
     { type: 'number', id: 'start', label: 'Start (seconds)', value: 0, min: 0, step: 0.1 },
@@ -1308,12 +1386,12 @@ const CARDS = [
   }
 },
 {
-  id: 'video-gif', cat: 'video', title: 'Video to GIF', desc: 'Short animated GIF clip',
-  accept: 'video/*', actionLabel: 'Create GIF', largeHint: true, validate: vVideo,
+  id: 'video-gif', cat: 'video', title: 'Make a GIF', desc: 'Turn a short moment into a looping GIF',
+  accept: 'video/*', actionLabel: 'Make GIF', largeHint: true, validate: vVideo,
   options: [
     { type: 'number', id: 'start', label: 'Start (seconds)', value: 0, min: 0, step: 0.1 },
-    { type: 'number', id: 'duration', label: 'Duration (max 10 s)', value: 3, min: 0.5, max: 10, step: 0.5 },
-    { type: 'select', id: 'fps', label: 'Frame rate', value: '15', choices: [['10', '10 fps'], ['15', '15 fps'], ['20', '20 fps']] },
+    { type: 'number', id: 'duration', label: 'Length (up to 10 s)', value: 3, min: 0.5, max: 10, step: 0.5 },
+    { type: 'select', id: 'fps', label: 'Smoothness', value: '15', choices: [['10', '10 fps (smaller file)'], ['15', '15 fps'], ['20', '20 fps (smoother)']] },
     { type: 'number', id: 'width', label: 'Width (px)', value: 480, min: 100, max: 1280 }
   ],
   run: async ctx => {
@@ -1330,18 +1408,18 @@ const CARDS = [
 
 /* ---------- Audio ---------- */
 {
-  id: 'audio-mp3', cat: 'audio', title: 'Convert to MP3', desc: 'Any audio to MP3',
-  accept: 'audio/*', actionLabel: 'Convert to MP3', largeHint: true, validate: vAudio,
-  options: [{ type: 'select', id: 'bitrate', label: 'Bitrate', value: '192k', choices: BITRATES }],
+  id: 'audio-mp3', cat: 'audio', title: 'Make it an MP3', desc: 'Plays everywhere',
+  accept: 'audio/*', actionLabel: 'Convert', largeHint: true, validate: vAudio,
+  options: [{ type: 'select', id: 'bitrate', label: 'Quality', value: '192k', choices: BITRATES }],
   run: async ctx => {
     const out = await ffmpegJob(ctx, ctx.file, (i, o) => ['-i', i, '-vn', '-acodec', 'libmp3lame', '-b:a', ctx.opt('bitrate'), '-map_metadata', '-1', '-y', o], '.mp3');
     return { files: [{ blob: new Blob([out], { type: 'audio/mpeg' }), name: `${stripExt(ctx.file.name)}.mp3` }], note: 'Metadata removed.' };
   }
 },
 {
-  id: 'audio-compress', cat: 'audio', title: 'Compress Audio', desc: 'Lower bitrate MP3',
+  id: 'audio-compress', cat: 'audio', title: 'Shrink audio', desc: 'Smaller MP3 that still sounds good',
   accept: 'audio/*', actionLabel: 'Compress', largeHint: true, validate: vAudio,
-  options: [{ type: 'select', id: 'bitrate', label: 'Bitrate', value: '128k', choices: [['96k', '96 kbps (smallest)'], ['128k', '128 kbps (recommended)'], ['192k', '192 kbps']] }],
+  options: [{ type: 'select', id: 'bitrate', label: 'Quality', value: '128k', choices: [['96k', '96 kbps (smallest)'], ['128k', '128 kbps (recommended)'], ['192k', '192 kbps']] }],
   run: async ctx => {
     const out = await ffmpegJob(ctx, ctx.file, (i, o) => ['-i', i, '-vn', '-acodec', 'libmp3lame', '-b:a', ctx.opt('bitrate'), '-map_metadata', '-1', '-y', o], '.mp3');
     const blob = new Blob([out], { type: 'audio/mpeg' });
@@ -1355,7 +1433,7 @@ const CARDS = [
   }
 },
 {
-  id: 'trim-audio', cat: 'audio', title: 'Trim Audio', desc: 'Cut an audio clip',
+  id: 'trim-audio', cat: 'audio', title: 'Trim audio', desc: 'Keep just the part you need',
   accept: 'audio/*', actionLabel: 'Trim', largeHint: true, validate: vAudio,
   options: [
     { type: 'number', id: 'start', label: 'Start (seconds)', value: 0, min: 0, step: 0.1 },
@@ -1371,9 +1449,9 @@ const CARDS = [
   }
 },
 {
-  id: 'normalize-audio', cat: 'audio', title: 'Normalize Audio', desc: 'Even out loudness levels',
-  accept: 'audio/*', actionLabel: 'Normalize', largeHint: true, validate: vAudio,
-  options: [{ type: 'radio', id: 'level', label: 'Target level', value: '-16', choices: [['-16', '-16 LUFS (streaming / podcast)'], ['-23', '-23 LUFS (broadcast)']] }],
+  id: 'normalize-audio', cat: 'audio', title: 'Even out volume', desc: 'No more too quiet or too loud',
+  accept: 'audio/*', actionLabel: 'Even it out', largeHint: true, validate: vAudio,
+  options: [{ type: 'radio', id: 'level', label: 'Made for', value: '-16', choices: [['-16', 'Podcasts & streaming (−16 LUFS)'], ['-23', 'TV & radio (−23 LUFS)']] }],
   run: async ctx => {
     const out = await ffmpegJob(ctx, ctx.file, (i, o) =>
       ['-i', i, '-vn', '-af', `loudnorm=I=${ctx.opt('level')}:TP=-1.5:LRA=11`, '-acodec', 'libmp3lame', '-b:a', '192k', '-map_metadata', '-1', '-y', o], '.mp3');
@@ -1381,16 +1459,16 @@ const CARDS = [
   }
 },
 {
-  id: 'split-tracks', cat: 'audio', title: 'Split Audio Tracks', desc: 'MKA / MKV → one WAV per track',
-  accept: '.mka,.mkv,.webm,.mp4,.mov,.m4a,audio/*,video/*', actionLabel: 'Extract Tracks', largeHint: true, validate: vAudio,
+  id: 'split-tracks', cat: 'audio', title: 'Separate audio tracks', desc: 'Save each track in an MKV or MKA as its own file',
+  accept: '.mka,.mkv,.webm,.mp4,.mov,.m4a,audio/*,video/*', actionLabel: 'Save tracks', largeHint: true, validate: vAudio,
   options: [
-    { type: 'custom', id: 'tracks', label: 'Tracks', cls: 'tracks' },
-    { type: 'select', id: 'depth', label: 'WAV bit depth', value: 's16', choices: [['s16', '16-bit PCM'], ['s24', '24-bit PCM'], ['f32', '32-bit float']] }
+    { type: 'custom', id: 'tracks', label: 'Which tracks', cls: 'tracks' },
+    { type: 'select', id: 'depth', label: 'Quality', value: 's16', choices: [['s16', '16-bit (standard)'], ['s24', '24-bit (studio)'], ['f32', '32-bit float (for editing)']] }
   ],
   // Runs right after a file is picked: probe the container and render one checkbox per audio track.
   fileInfo: async (f, setInfo, card) => {
     const box = $(`opt-${card.id}-tracks`);
-    box.innerHTML = '<span class="hint" style="margin:0">Reading tracks…</span>';
+    box.innerHTML = '<span class="hint" style="margin:0">Looking for tracks…</span>';
     const st = state[card.id];
     st.tracks = null;
     if (!FF.loaded) { setInfo('loading FFmpeg…'); await FF.load(); }
@@ -1399,12 +1477,12 @@ const CARDS = [
     if (!tracks.length) throw new Error('No audio tracks found in this file — it may be corrupt or use an unsupported container.');
     st.tracks = tracks;
     setInfo(`${tracks.length} audio track${tracks.length === 1 ? '' : 's'}`);
-    box.innerHTML = tracks.map((t, i) => {
+    box.innerHTML = '<div class="seglist">' + tracks.map((t, i) => {
       const name = t.title || (t.lang ? `Track ${i + 1} (${t.lang})` : `Track ${i + 1}`);
       const info = [t.codec, t.rate ? t.rate + ' Hz' : '', t.layout].filter(Boolean).join(' · ');
       return `<label class="tk"><input type="checkbox" data-track="${i}" checked><span class="tn">${esc(name)}</span><span class="ti">${esc(info)}</span></label>`;
-    }).join('') + (tracks.length > 1
-      ? `<div class="tsel"><a data-sel="all">Select all</a><a data-sel="none">Select none</a></div>` : '');
+    }).join('') + '</div>' + (tracks.length > 1
+      ? `<div class="tsel"><button class="btn txt" data-sel="all">Select all</button><button class="btn txt" data-sel="none">Select none</button></div>` : '');
     box.querySelectorAll('[data-sel]').forEach(a => a.addEventListener('click', () => {
       box.querySelectorAll('input[data-track]').forEach(cb => { cb.checked = a.dataset.sel === 'all'; });
     }));
@@ -1460,14 +1538,21 @@ function optRowHtml(card, o) {
       ctrl = `<input type="text" id="${id}" placeholder="${o.placeholder || ''}">`; break;
     case 'range':
       ctrl = `<input type="range" id="${id}" min="${o.min}" max="${o.max}" value="${o.value}"><span class="rv" id="${id}-v">${o.value}${o.suffix || ''}</span>`; break;
-    case 'radio':
-      ctrl = o.choices.map(([v, l]) => `<label class="rl"><input type="radio" name="${id}" value="${v}"${v === o.value ? ' checked' : ''}> ${l}</label>`).join('<br>'); break;
+    case 'radio': {
+      // "Title — detail" / "Title (detail)" choices become a radio list; short ones a segmented button.
+      const parts = o.choices.map(([v, l]) => { const m = l.match(/^(.+?) — (.+)$/) || l.match(/^(.+?) \((.+)\)$/); return [v, m ? m[1] : l, m ? m[2] : '']; });
+      const radio = v => `<input type="radio" name="${id}" value="${v}"${v === o.value ? ' checked' : ''}>`;
+      ctrl = parts.some(p => p[2])
+        ? `<div class="seglist radios" role="radiogroup">${parts.map(([v, t, d]) => `<label>${radio(v)}<span><b>${t}</b>${d ? `<span>${d}</span>` : ''}</span></label>`).join('')}</div>`
+        : `<div class="seg" role="radiogroup">${parts.map(([v, t]) => `<label>${radio(v)}${ICONS.check.replace('<svg', '<svg class="ck"')}${t}</label>`).join('')}</div>`;
+      break;
+    }
     case 'checkbox':
       ctrl = `<input type="checkbox" id="${id}"${o.value ? ' checked' : ''}>`; break;
     case 'custom':
       ctrl = `<div id="${id}" class="${o.cls || ''}"></div>`; break;
   }
-  return `<div class="opt-row" id="row-${id}"${o.type === 'custom' ? ' style="align-items:flex-start"' : ''}><label>${o.label}</label><div class="ctrl"${o.type === 'custom' ? ' style="flex:1;min-width:0"' : ''}>${ctrl}</div></div>`;
+  return `<div class="opt-row" id="row-${id}"${o.type === 'custom' ? ' style="align-items:start"' : ''}><label${o.type === 'radio' || o.type === 'custom' ? '' : ` for="${id}"`}>${o.label}</label><div class="ctrl">${ctrl}</div></div>`;
 }
 
 function getOptValue(card, oid) {
@@ -1483,47 +1568,72 @@ function getOptValue(card, oid) {
   return o.type === 'checkbox' ? el.checked : el.value;
 }
 
-function cardHtml(card, idx) {
+const svg = (d, size = 24) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const ICONS = {
+  close: svg('<path d="M6 6l12 12M18 6 6 18"/>'),
+  chevron: svg('<path d="m9 6 6 6-6 6"/>'),
+  upload: svg('<path d="M12 15V3m0 0-4 4m4-4 4 4"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/>'),
+  file: svg('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>'),
+  plus: svg('<path d="M12 5v14M5 12h14"/>', 18),
+  check: svg('<path d="M20 6 9 17l-5-5"/>', 18),
+  download: svg('<path d="M12 3v12m0 0-4-4m4 4 4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>', 18)
+};
+
+const fileRow = (name, sizeId, size, clearAttr) =>
+  `<div class="fitem">${ICONS.file}<div class="nm"><b>${esc(name)}</b><span${sizeId ? ` id="${sizeId}"` : ''}>${size}</span></div><button class="x" ${clearAttr} aria-label="Remove file">${ICONS.close}</button></div>`;
+
+function cardHtml(card, cat) {
   return `
   <div class="card" id="card-${card.id}">
-    <div class="card-head" data-card="${card.id}">
-      <div class="ic">${idx}</div>
-      <div><div class="t">${card.title}</div><div class="d">${card.desc}</div></div>
-      <button class="x hidden" data-close="${card.id}" title="Close">&times;</button>
+    <div class="card-head">
+      <button class="head-btn" aria-expanded="false" aria-controls="body-${card.id}">
+        <span class="ic">${svg(cat.icon)}</span>
+        <span><span class="t">${card.title}</span><span class="d">${card.desc}</span></span>
+        <span class="chev">${ICONS.chevron}</span>
+      </button>
+      <button class="x hidden" aria-label="Close ${card.title}">${ICONS.close}</button>
     </div>
     <div class="card-body hidden" id="body-${card.id}">
-      <div class="dz" id="dz-${card.id}">Drop ${card.multiple ? 'files' : 'a file'} here or click to browse
+      <div class="dz" id="dz-${card.id}" role="button" tabindex="0">${ICONS.upload}
+        <b>Drop ${card.multiple ? 'files' : 'a file'} here</b><span>or click to choose</span>
         <input type="file" id="file-${card.id}" accept="${card.accept}"${card.multiple ? ' multiple' : ''} hidden>
       </div>
       <div class="hidden" id="opts-${card.id}">
         ${card.multiple
-          ? `<div class="flist" id="flist-${card.id}"></div><button class="addmore" id="add-${card.id}">+ Add more files</button>`
-          : `<div class="fileinfo"><span id="fname-${card.id}"></span> <span class="fi-size" id="finfo-${card.id}"></span><button class="clear" id="clear-${card.id}" title="Remove file">&times;</button></div>
+          ? `<div class="seglist" id="flist-${card.id}"></div>`
+          : `<div class="seglist" id="fone-${card.id}"></div>
              <div class="hint hidden" id="hint-${card.id}"></div>`}
         ${card.options.map(o => optRowHtml(card, o)).join('')}
-        <button class="go" id="go-${card.id}">${card.actionLabel}</button>
+        <div class="actions">
+          <button class="btn go" id="go-${card.id}">${card.actionLabel}</button>
+          ${card.multiple ? `<button class="btn outl" id="add-${card.id}">${ICONS.plus}Add more files</button>` : ''}
+        </div>
       </div>
-      <div class="prog hidden" id="prog-${card.id}">
-        <div class="pstat" id="pstat-${card.id}">Working…</div>
-        <div class="bar"><div class="fill" id="pfill-${card.id}"></div></div>
-        <div class="ppct" id="ppct-${card.id}">0%</div>
+      <div class="prog hidden" id="prog-${card.id}" role="status">
+        <div class="row"><span id="pstat-${card.id}">Working…</span><span class="ppct" id="ppct-${card.id}">0%</span></div>
+        <div class="bar"><div class="fill" id="pfill-${card.id}"></div><div class="track"></div></div>
       </div>
       <div class="result hidden" id="res-${card.id}">
-        <div class="ok">Done</div>
+        <div class="ok">${ICONS.check}All set</div>
         <div class="rnote" id="rnote-${card.id}"></div>
-        <button class="go" id="dl-${card.id}">Download</button>
-        <button class="sec" id="again-${card.id}">Convert another</button>
+        <div class="actions">
+          <button class="btn go" id="dl-${card.id}">Download</button>
+          <button class="btn outl" id="again-${card.id}">Do another</button>
+        </div>
       </div>
     </div>
   </div>`;
 }
 
 function buildUI() {
-  $('cats').innerHTML = CATEGORIES.map((cat, ci) => `
-    <section class="cat" id="cat-${cat.id}" style="--cat: ${cat.color}">
-      <div class="cat-head"><span class="cat-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${cat.icon}</svg></span><h2>${cat.label}</h2><span class="key">${ci + 1}</span></div>
-      <div class="cards">${CARDS.filter(c => c.cat === cat.id).map((c, i) => cardHtml(c, i + 1)).join('')}</div>
-    </section>`).join('');
+  $('cats').innerHTML = CATEGORIES.map((cat, ci) => {
+    const cards = CARDS.filter(c => c.cat === cat.id);
+    return `
+    <section class="cat" id="cat-${cat.id}" data-cat="${cat.id}" aria-labelledby="h-${cat.id}">
+      <div class="cat-head"><span class="ic">${svg(cat.icon)}</span><div><h2 id="h-${cat.id}">${cat.label}</h2><div class="n">${cards.length} tools</div></div><kbd title="Press ${ci + 1} to jump here">${ci + 1}</kbd></div>
+      <div class="cards">${cards.map(c => cardHtml(c, cat)).join('')}</div>
+    </section>`;
+  }).join('');
   CARDS.forEach(wireCard);
 }
 
@@ -1555,7 +1665,8 @@ function openCard(cardId) {
   const c = $(`card-${cardId}`);
   c.classList.add('open');
   $(`body-${cardId}`).classList.remove('hidden');
-  c.querySelector('.x').classList.remove('hidden');
+  c.querySelector('.card-head .x').classList.remove('hidden');
+  c.querySelector('.head-btn').setAttribute('aria-expanded', 'true');
   c.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
@@ -1564,7 +1675,8 @@ function closeCard(cardId) {
   if (!c) return;
   c.classList.remove('open');
   $(`body-${cardId}`).classList.add('hidden');
-  c.querySelector('.x').classList.add('hidden');
+  c.querySelector('.card-head .x').classList.add('hidden');
+  c.querySelector('.head-btn').setAttribute('aria-expanded', 'false');
   resetCard(CARD_MAP[cardId]);
   if (openCardId === cardId) openCardId = null;
 }
@@ -1572,8 +1684,7 @@ function closeCard(cardId) {
 function renderFileList(card) {
   const st = state[card.id];
   const list = $(`flist-${card.id}`);
-  list.innerHTML = st.files.map((f, i) =>
-    `<div class="fitem"><span>${esc(f.name)}</span><span class="sz">${fmtSize(f.size)}</span><button data-i="${i}" title="Remove">&times;</button></div>`).join('');
+  list.innerHTML = st.files.map((f, i) => fileRow(f.name, null, fmtSize(f.size), `data-i="${i}"`)).join('');
   list.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
     st.files.splice(parseInt(btn.dataset.i, 10), 1);
     if (st.files.length) renderFileList(card);
@@ -1586,6 +1697,7 @@ async function acceptFiles(card, fileList) {
   if (!files.length) return;
   const st = state[card.id];
   try {
+    await libsReady;
     if (card.multiple) {
       const ok = files.filter(card.filter);
       if (files.length - ok.length > 0) showError(`${files.length - ok.length} file(s) skipped — not supported by this tool.`);
@@ -1596,15 +1708,15 @@ async function acceptFiles(card, fileList) {
       const f = files[0];
       if (card.validate) card.validate(f);
       st.files = [f];
-      $(`fname-${card.id}`).textContent = f.name;
-      $(`finfo-${card.id}`).textContent = `(${fmtSize(f.size)})`;
+      $(`fone-${card.id}`).innerHTML = fileRow(f.name, `finfo-${card.id}`, fmtSize(f.size), 'data-clear');
+      $(`fone-${card.id}`).querySelector('[data-clear]').addEventListener('click', () => resetCard(card));
       const hint = $(`hint-${card.id}`);
       if (hint) {
         const big = card.largeHint && f.size > 200 * 1048576;
         hint.classList.toggle('hidden', !big);
-        if (big) hint.textContent = `Large file (${fmtSize(f.size)}) — processing may take several minutes.`;
+        if (big) hint.textContent = `Big file (${fmtSize(f.size)}). This could take a few minutes.`;
       }
-      if (card.fileInfo) await card.fileInfo(f, txt => { $(`finfo-${card.id}`).textContent = `(${fmtSize(f.size)} · ${txt})`; }, card);
+      if (card.fileInfo) await card.fileInfo(f, txt => { $(`finfo-${card.id}`).textContent = `${fmtSize(f.size)} · ${txt}`; }, card);
     }
     showPanel(card.id, 'opts');
     applyShowIf(card);
@@ -1629,7 +1741,8 @@ async function runCard(card) {
     }
   };
   try {
-    ctx.progress('Starting…', 2);
+    await libsReady;
+    ctx.progress('Getting ready…', 2);
     const result = await card.run(ctx);
     ctx.progress('Complete', 100);
     st.result = result;
@@ -1637,8 +1750,9 @@ async function runCard(card) {
       ? `${result.files[0].name} (${fmtSize(result.files[0].blob.size)})`
       : `${result.files.length} files ready — will download as one ZIP`;
     $(`rnote-${card.id}`).textContent = head + (result.note ? '\n' + result.note : '');
-    $(`dl-${card.id}`).textContent = result.files.length === 1 ? 'Download' : `Download ZIP (${result.files.length} files)`;
+    $(`dl-${card.id}`).innerHTML = ICONS.download + (result.files.length === 1 ? 'Download' : `Download ZIP (${result.files.length} files)`);
     showPanel(card.id, 'res');
+    haptic([10, 40, 14]);
   } catch (e) {
     showPanel(card.id, 'opts');
     showError(e.message || String(e));
@@ -1654,25 +1768,29 @@ async function downloadResult(card) {
   } catch (e) { showError('Download failed: ' + (e.message || e)); }
 }
 
-function wireCard(card) {
-  const id = card.id;
-  const input = $(`file-${id}`);
-  const dz = $(`dz-${id}`);
-
-  $(`card-${id}`).querySelector('.card-head').addEventListener('click', e => {
-    if (e.target.dataset.close) { e.stopPropagation(); closeCard(id); return; }
-    openCard(id);
-  });
-
+function wireDropzone(dz, input, onFiles) {
   dz.addEventListener('click', () => input.click());
+  dz.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } });
   dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
   dz.addEventListener('dragleave', () => dz.classList.remove('over'));
   dz.addEventListener('drop', e => {
     e.preventDefault(); e.stopPropagation();
     dz.classList.remove('over');
-    acceptFiles(card, e.dataTransfer.files);
+    onFiles(e.dataTransfer.files);
   });
-  input.addEventListener('change', () => { acceptFiles(card, input.files); input.value = ''; });
+  input.addEventListener('change', () => { onFiles(input.files); input.value = ''; });
+}
+
+function wireCard(card) {
+  const id = card.id;
+  const input = $(`file-${id}`);
+  const dz = $(`dz-${id}`);
+
+  const head = $(`card-${id}`).querySelector('.card-head');
+  head.querySelector('.head-btn').addEventListener('click', () => openCard(id));
+  head.querySelector('.x').addEventListener('click', () => closeCard(id));
+
+  wireDropzone(dz, input, files => acceptFiles(card, files));
 
   const opts = $(`opts-${id}`);
   opts.addEventListener('change', () => applyShowIf(card));
@@ -1686,7 +1804,6 @@ function wireCard(card) {
   $(`go-${id}`).addEventListener('click', () => runCard(card));
   $(`dl-${id}`).addEventListener('click', () => downloadResult(card));
   $(`again-${id}`).addEventListener('click', () => resetCard(card));
-  if (!card.multiple) $(`clear-${id}`).addEventListener('click', () => resetCard(card));
   if (card.multiple) $(`add-${id}`).addEventListener('click', () => input.click());
   if (card.wire) card.wire(card);
 }
@@ -1697,7 +1814,13 @@ function setupGlobal() {
   document.body.addEventListener('drop', e => {
     e.preventDefault();
     if (e.target.closest('.dz')) return; // card dropzone handles it
-    const files = Array.from(e.dataTransfer.files);
+    routeFiles(e.dataTransfer.files);
+  });
+  wireDropzone($('heroDz'), $('heroFile'), routeFiles);
+
+  // Pick the most likely tool for a dropped/browsed file and open it.
+  function routeFiles(fileList) {
+    const files = Array.from(fileList);
     if (!files.length) return;
     const f = files[0];
     let target = null;
@@ -1710,7 +1833,7 @@ function setupGlobal() {
     if (!target) { showError(`Unsupported file type (${f.type || extOf(f.name) || 'unknown'}). Open a specific tool to see what it accepts.`); return; }
     openCard(target);
     acceptFiles(CARD_MAP[target], files);
-  });
+  }
 
   document.addEventListener('keydown', e => {
     if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) || e.target.isContentEditable) return;
@@ -1723,12 +1846,9 @@ function setupGlobal() {
 }
 
 /* ============================ init ============================ */
-document.addEventListener('DOMContentLoaded', () => {
-  if (typeof pdfjsLib !== 'undefined')
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.9.359/pdf.worker.min.js';
-  buildUI();
-  setupGlobal();
-});
+// This script sits at the end of <body>, so the DOM is ready: build immediately, before the deferred libraries arrive.
+buildUI();
+setupGlobal();
 </script>
 </body>
 </html>
