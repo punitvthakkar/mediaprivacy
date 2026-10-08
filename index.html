@@ -20,6 +20,7 @@
 <script defer src="https://unpkg.com/pdfkit@0.11.0/js/pdfkit.standalone.js" integrity="sha384-+1TYy4h30Fs7Ni8K4zNoYAhJm2LGRcZxYJ3xWpQt4g9PbFQbnhd7yrDOGnhF6CvS" crossorigin="anonymous"></script>
 <script defer src="https://unpkg.com/fflate@0.8.2/umd/index.js" integrity="sha384-DT0Ls0mO7JmjTnT+oBuMhEJzYJO1zUqzuuMXNdnOmOQRIpN2BgSjvBV/j50NngIT" crossorigin="anonymous"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" integrity="sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H" crossorigin="anonymous"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" integrity="sha384-mZT2gIty7ZDdOGkxfP6joZcYdMW1Jvj9dRlfpTmaJAKKXTqzygtB22k7FLe+KZC1" crossorigin="anonymous"></script>
 
 <style>
 /* Material Next: speculative design forecast (frozen 2026-09-24). Not an official Google design.
@@ -214,6 +215,30 @@ kbd { font: 500 12px/16px var(--font); padding: 2px 8px; border-radius: var(--xs
 .tracks .tk .ti { color: var(--md-sys-color-on-surface-variant); font-size: 12px; line-height: 16px; letter-spacing: .4px; margin-left: auto; text-align: right; }
 .tsel { display: flex; gap: 8px; margin-top: 8px; }
 
+/* Link to QR code: options on the left, live preview on the right */
+.qr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px var(--mn-space-gutter); align-items: start; }
+@media (max-width: 719px) { .qr { grid-template-columns: 1fr; } }
+.qr .opt-row input[type=url] { width: 100%; }
+.opt-row input[type=url] {
+  height: 48px; padding: 0 16px; min-width: 0; background: transparent;
+  border: 1px solid var(--md-sys-color-outline); border-radius: var(--xs); font-size: 16px; letter-spacing: .5px;
+}
+.opt-row input[type=color] { width: 48px; height: 48px; padding: 4px; cursor: pointer; background: transparent;
+  border: 1px solid var(--md-sys-color-outline); border-radius: var(--xs); }
+.opt-row input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }
+.opt-row input[type=color]::-webkit-color-swatch { border: 0; border-radius: 2px; }
+.opt-row input[type=color]::-moz-color-swatch { border: 0; border-radius: 2px; }
+.qr .ctrl > .dz, .qr .ctrl > .seglist { width: 100%; margin: 0; }
+.qr .dz { padding: 16px; flex-direction: row; justify-content: center; gap: 12px; }
+.qr .dz svg { width: 24px; height: 24px; margin: 0; }
+.qr-prev { width: 264px; max-width: 100%; aspect-ratio: 1; border-radius: var(--lg); overflow: hidden; display: grid; place-items: center;
+  background: var(--md-sys-color-surface-container-highest); color: var(--md-sys-color-on-surface-variant);
+  font-size: 14px; line-height: 20px; letter-spacing: .25px; text-align: center; padding: 0; }
+.qr-prev canvas { width: 100%; height: 100%; display: block; }
+.qr-side { display: flex; flex-direction: column; gap: 12px; }
+.qr-side .hint { margin: 0; max-width: 264px; }
+@media (max-width: 719px) { .qr-prev { width: min(320px, 100%); justify-self: center; } .qr-side .hint { max-width: none; } }
+
 /* ---------- buttons (pill → medium corners on press: forecast E1) ---------- */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
@@ -227,6 +252,7 @@ kbd { font: 500 12px/16px var(--font); padding: 2px 8px; border-radius: var(--xs
 .go { background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); }
 .go:hover { background: color-mix(in srgb, var(--md-sys-color-on-primary) 8%, var(--md-sys-color-primary)); box-shadow: var(--mn-depth-1-shadow); }
 .go:active { background: color-mix(in srgb, var(--md-sys-color-on-primary) 10%, var(--md-sys-color-primary)); box-shadow: none; }
+.go:disabled { background: color-mix(in srgb, var(--md-sys-color-on-surface) 12%, transparent); color: color-mix(in srgb, var(--md-sys-color-on-surface) 38%, transparent); box-shadow: none; cursor: default; }
 .outl { background: transparent; border: 1px solid var(--md-sys-color-outline); color: var(--md-sys-color-primary); }
 .txt { background: transparent; color: var(--md-sys-color-primary); padding: 0 12px; }
 .outl:hover, .txt:hover { background: color-mix(in srgb, var(--md-sys-color-primary) 8%, transparent); }
@@ -932,6 +958,63 @@ function toWinAnsi(s) {
   return { text, replaced };
 }
 
+/* --- Link to QR code: encode with qrcode-generator, draw on a canvas (nothing leaves the page) --- */
+// Phones only open it as a link when there is a scheme, so "example.com" becomes "https://example.com".
+const normalizeLink = s => /^[a-z][a-z0-9+.-]*:/i.test(s) || !/^[^\s/]+\.[^\s/]{2,}/.test(s) ? s : 'https://' + s;
+function makeQr(text, ecl, minVersion = 0) {
+  qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
+  let qr = qrcode(0, ecl);
+  qr.addData(text, 'Byte'); qr.make();
+  if (qr.getModuleCount() < 17 + 4 * minVersion) { qr = qrcode(minVersion, ecl); qr.addData(text, 'Byte'); qr.make(); }
+  return qr;
+}
+function drawQr(canvas, qr, { size, fg, bg, style, logo }) {
+  const n = qr.getModuleCount(), quiet = 4, m = size / (n + quiet * 2);
+  const px = i => Math.round((i + quiet) * m); // snap module edges to whole pixels so neighbours meet without seams
+  canvas.width = canvas.height = size;
+  const g = canvas.getContext('2d');
+  g.fillStyle = bg; g.fillRect(0, 0, size, size);
+  g.fillStyle = fg;
+  const rr = (x0, y0, x1, y1, r) => g.roundRect ? g.roundRect(x0, y0, x1 - x0, y1 - y0, r) : g.rect(x0, y0, x1 - x0, y1 - y0);
+  // Leave a clear square in the middle for the logo; error correction H rebuilds the hidden modules.
+  let k = 0, k0 = 0;
+  if (logo) { k = Math.floor(n * 0.24); if ((n - k) % 2) k++; k0 = (n - k) / 2; }
+  const inLogo = (r, c) => k && r >= k0 && r < k0 + k && c >= k0 && c < k0 + k;
+  const inEye = (r, c) => (r < 7 && (c < 7 || c >= n - 7)) || (r >= n - 7 && c < 7);
+  const dark = (r, c) => r >= 0 && c >= 0 && r < n && c < n && qr.isDark(r, c) && !inEye(r, c) && !inLogo(r, c);
+  g.beginPath();
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+    if (!dark(r, c)) continue;
+    const x0 = px(c), y0 = px(r), x1 = px(c + 1), y1 = px(r + 1);
+    if (style === 'dots') { g.moveTo(x1, (y0 + y1) / 2); g.arc((x0 + x1) / 2, (y0 + y1) / 2, m * 0.5, 0, Math.PI * 2); }
+    else if (style === 'rounded') {
+      // Round only the corners that touch no neighbour, so runs of modules melt together.
+      const up = dark(r - 1, c), dn = dark(r + 1, c), lf = dark(r, c - 1), rt = dark(r, c + 1), q = m / 2;
+      rr(x0, y0, x1, y1, [!up && !lf ? q : 0, !up && !rt ? q : 0, !dn && !rt ? q : 0, !dn && !lf ? q : 0]);
+    } else g.rect(x0, y0, x1 - x0, y1 - y0);
+  }
+  g.fill();
+  // Finder "eyes": solid ring + centre, rounded to match the style but kept square enough to scan.
+  const R = { square: 0, rounded: m * 2, dots: m * 2.5 }[style] || 0;
+  for (const [r0, c0] of [[0, 0], [0, n - 7], [n - 7, 0]]) {
+    const ring = (i, col, rad) => { g.fillStyle = col; g.beginPath(); rr(px(c0 + i), px(r0 + i), px(c0 + 7 - i), px(r0 + 7 - i), rad); g.fill(); };
+    ring(0, fg, R); ring(1, bg, R * 0.6); ring(2, fg, R * 0.5);
+  }
+  if (logo) {
+    const x0 = px(k0), y0 = px(k0), box = px(k0 + k) - x0, pad = m * 0.6;
+    const lw = logo.naturalWidth || 1, lh = logo.naturalHeight || 1, f = (box - pad * 2) / Math.max(lw, lh);
+    g.drawImage(logo, x0 + (box - lw * f) / 2, y0 + (box - lh * f) / 2, lw * f, lh * f);
+  }
+}
+function contrastRatio(a, b) {
+  const lum = hex => {
+    const v = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(c => c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+    return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2];
+  };
+  const la = lum(a), lb = lum(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05) * (la <= lb ? 1 : -1); // negative = light code on dark background
+}
+
 /* ============================ card configs ============================ */
 const CATEGORIES = [
   { id: 'pdf', label: 'PDFs',
@@ -1319,6 +1402,100 @@ const CARDS = [
     throw new Error(`Metadata removal is not supported for this file type (${t || extOf(n) || 'unknown'}). Supported: images (JPEG/PNG/WebP), PDF, video and audio files.`);
   }
 },
+{
+  // No file to drop: the card has its own body and redraws the code on every change.
+  id: 'url-qr', cat: 'image', title: 'Link to QR code', desc: 'Paste a link, style it, save it as a PNG',
+  options: [
+    { type: 'url', id: 'url', label: 'Link', placeholder: 'https://example.com', autofocus: true },
+    { type: 'color', id: 'fg', label: 'Code color', value: '#000000' },
+    { type: 'color', id: 'bg', label: 'Background', value: '#ffffff' },
+    { type: 'radio', id: 'style', label: 'Style', value: 'square', choices: [['square', 'Square'], ['rounded', 'Rounded'], ['dots', 'Dots']] },
+    { type: 'custom', id: 'logo', label: 'Logo in the middle' },
+    { type: 'select', id: 'size', label: 'Image size', value: '1024', choices: [['512', '512 × 512 px'], ['1024', '1024 × 1024 px'], ['2048', '2048 × 2048 px (print)']] }
+  ],
+  body: card => `
+    <div class="qr">
+      <div>${card.options.map(o => optRowHtml(card, o)).join('')}</div>
+      <div class="qr-side">
+        <div class="qr-prev" id="qr-prev"><span id="qr-empty">Paste a link and your<br>QR code shows up here</span><canvas id="qr-canvas" class="hidden" role="img" aria-label="QR code preview"></canvas></div>
+        <p class="hint hidden" id="qr-note" role="status"></p>
+        <div class="actions"><button class="btn go" id="qr-dl" disabled>${ICONS.download}Download PNG</button></div>
+      </div>
+    </div>`,
+  wire: card => {
+    const st = state[card.id], canvas = $('qr-canvas'), get = oid => getOptValue(card, oid);
+    const logoBox = $(`opt-${card.id}-logo`);
+    logoBox.innerHTML = `<div class="dz" id="qr-logo-dz" role="button" tabindex="0">${ICONS.upload}<span>Add an image or icon (optional)</span>
+      <input type="file" id="qr-logo-file" accept="image/*" hidden></div><div class="seglist hidden" id="qr-logo-row"></div>`;
+    const showLogo = f => {
+      $('qr-logo-dz').classList.toggle('hidden', !!f);
+      $('qr-logo-row').classList.toggle('hidden', !f);
+      $('qr-logo-row').innerHTML = f ? fileRow(f.name, null, fmtSize(f.size), 'data-clear') : '';
+      if (f) $('qr-logo-row').querySelector('[data-clear]').addEventListener('click', () => { st.logo = null; showLogo(null); schedule(); });
+    };
+    wireDropzone($('qr-logo-dz'), $('qr-logo-file'), async files => {
+      const f = files[0];
+      if (!f) return;
+      try {
+        if (!f.type.startsWith('image/')) throw new Error('Please choose an image for the logo (PNG, JPEG, SVG, WebP…).');
+        st.logo = await loadImage(f);
+        showLogo(f); schedule();
+      } catch (e) { showError(e.message || String(e)); }
+    });
+
+    const render = async () => {
+      const raw = get('url').trim(), note = $('qr-note'), dl = $('qr-dl');
+      const say = msg => { note.textContent = msg; note.classList.toggle('hidden', !msg); };
+      const show = ok => { canvas.classList.toggle('hidden', !ok); $('qr-empty').classList.toggle('hidden', ok); dl.disabled = !ok; if (!ok) st.result = null; };
+      if (!raw) { show(false); say(''); return; }
+      await libsReady;
+      if (typeof qrcode === 'undefined') { show(false); say('The QR maker didn’t load. Check your connection and reload the page.'); return; }
+      const text = normalizeLink(raw), fg = get('fg'), bg = get('bg');
+      let qr;
+      // H survives a logo covering the middle, Q gives dots extra margin; tiny codes are bumped to version 4 so the logo never sits on format info.
+      try { qr = st.logo ? makeQr(text, 'H', 4) : makeQr(text, get('style') === 'dots' ? 'Q' : 'M'); }
+      catch (_) { show(false); say('That’s too long to fit in a QR code. Try a shorter link.'); return; }
+      drawQr(canvas, qr, { size: parseInt(get('size'), 10), fg, bg, style: get('style'), logo: st.logo });
+      st.result = { text };
+      show(true);
+      const cr = contrastRatio(fg, bg);
+      say([
+        text !== raw ? `Opens ${text}` : '',
+        cr < 0 ? 'Light code on a dark background: some scanner apps can’t read that. Dark on light is safest.'
+          : cr < 4 ? 'These colors are close, so phones may struggle to scan it. Try more contrast.' : ''
+      ].filter(Boolean).join('\n'));
+    };
+    let raf = 0;
+    const schedule = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(render); };
+    st.redraw = schedule;
+    const body = $(`body-${card.id}`);
+    body.addEventListener('input', e => {
+      if (e.target.type === 'color') $(`${e.target.id}-v`).textContent = e.target.value.toUpperCase();
+      schedule();
+    });
+    body.addEventListener('change', schedule);
+
+    $('qr-dl').addEventListener('click', async () => {
+      if (!st.result) return;
+      try {
+        let host = '';
+        try { host = new URL(st.result.text).hostname.replace(/^www\./, ''); } catch (_) {}
+        downloadBlob(await canvasToBlob(canvas, 'image/png'), `qr_${host.replace(/[^\w.-]+/g, '_') || 'code'}.png`);
+        haptic([10, 40, 14]);
+      } catch (e) { showError('Download failed: ' + (e.message || e)); }
+    });
+    showLogo(null);
+  },
+  reset: card => {
+    const st = state[card.id];
+    $(`opt-${card.id}-url`).value = '';
+    st.logo = null;
+    $('qr-logo-row').innerHTML = '';
+    $('qr-logo-row').classList.add('hidden');
+    $('qr-logo-dz').classList.remove('hidden');
+    if (st.redraw) st.redraw();
+  }
+},
 
 /* ---------- Video ---------- */
 {
@@ -1536,6 +1713,10 @@ function optRowHtml(card, o) {
       ctrl = `<input type="number" id="${id}" value="${o.value}"${o.min != null ? ` min="${o.min}"` : ''}${o.max != null ? ` max="${o.max}"` : ''} step="${o.step || 1}">`; break;
     case 'text':
       ctrl = `<input type="text" id="${id}" placeholder="${o.placeholder || ''}">`; break;
+    case 'url':
+      ctrl = `<input type="url" id="${id}" inputmode="url" autocomplete="off" spellcheck="false" placeholder="${o.placeholder || ''}"${o.autofocus ? ' data-autofocus' : ''}>`; break;
+    case 'color':
+      ctrl = `<input type="color" id="${id}" value="${o.value}"><span class="rv" id="${id}-v">${o.value.toUpperCase()}</span>`; break;
     case 'range':
       ctrl = `<input type="range" id="${id}" min="${o.min}" max="${o.max}" value="${o.value}"><span class="rv" id="${id}-v">${o.value}${o.suffix || ''}</span>`; break;
     case 'radio': {
@@ -1593,7 +1774,7 @@ function cardHtml(card, cat) {
       </button>
       <button class="x hidden" aria-label="Close ${card.title}">${ICONS.close}</button>
     </div>
-    <div class="card-body hidden" id="body-${card.id}">
+    <div class="card-body hidden" id="body-${card.id}">${card.body ? card.body(card) : `
       <div class="dz" id="dz-${card.id}" role="button" tabindex="0">${ICONS.upload}
         <b>Drop ${card.multiple ? 'files' : 'a file'} here</b><span>or click to choose</span>
         <input type="file" id="file-${card.id}" accept="${card.accept}"${card.multiple ? ' multiple' : ''} hidden>
@@ -1620,7 +1801,7 @@ function cardHtml(card, cat) {
           <button class="btn go" id="dl-${card.id}">Download</button>
           <button class="btn outl" id="again-${card.id}">Do another</button>
         </div>
-      </div>
+      </div>`}
     </div>
   </div>`;
 }
@@ -1653,6 +1834,7 @@ function applyShowIf(card) {
 function resetCard(card) {
   const st = state[card.id];
   st.files = []; st.result = null; st.dims = null; st.tracks = null;
+  if (card.body) { if (card.reset) card.reset(card); return; }
   $(`file-${card.id}`).value = '';
   if (card.multiple) $(`flist-${card.id}`).innerHTML = '';
   showPanel(card.id, 'dz');
@@ -1668,6 +1850,8 @@ function openCard(cardId) {
   c.querySelector('.card-head .x').classList.remove('hidden');
   c.querySelector('.head-btn').setAttribute('aria-expanded', 'true');
   c.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  const af = c.querySelector('[data-autofocus]');
+  if (af) af.focus({ preventScroll: true });
 }
 
 function closeCard(cardId) {
@@ -1789,6 +1973,7 @@ function wireCard(card) {
   const head = $(`card-${id}`).querySelector('.card-head');
   head.querySelector('.head-btn').addEventListener('click', () => openCard(id));
   head.querySelector('.x').addEventListener('click', () => closeCard(id));
+  if (card.body) { card.wire(card); return; }
 
   wireDropzone(dz, input, files => acceptFiles(card, files));
 
